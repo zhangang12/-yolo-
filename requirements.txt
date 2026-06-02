@@ -1,0 +1,8 @@
+# Python 依赖
+pymupdf>=1.23        # 解析矢量PDF、渲染、标注回写
+opencv-python>=4.8   # 图像处理、区域轮廓、画标注
+numpy>=1.24
+pytesseract>=0.3.10  # OCR 封装(需另装系统级 tesseract)
+Pillow>=10.0
+# 训练阶段(后续):
+# ultralytics>=8.2   # YOLO 检测/分割
