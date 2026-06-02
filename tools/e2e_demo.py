@@ -11,6 +11,12 @@ import sys, os, re, json, argparse, io
 from collections import defaultdict
 import xml.etree.ElementTree as ET
 
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 # ---- 规范阈值（演示用，真实项目应接规则引擎）----
 RULE_COMPARTMENT_PUBLIC = 5000.0   # 站厅公共区 ≤5000㎡  (GB51298 4.2.1)
 RULE_COMPARTMENT_EQUIP  = 1500.0   # 设备管理区每分区 ≤1500㎡ (GB51298 4.2.2)
@@ -69,7 +75,14 @@ def stage1_recognize(page, sc, Wp, Hp):
     f = min(1.0, capW/float(base_img.width))
     ocr_img = base_img.resize((int(base_img.width*f), int(base_img.height*f))) if f<1 else base_img
     inv = 1.0/f
-    data = pytesseract.image_to_data(ocr_img, config=cfg, output_type=pytesseract.Output.DICT)
+    try:
+        data = pytesseract.image_to_data(ocr_img, config=cfg, output_type=pytesseract.Output.DICT)
+    except pytesseract.TesseractNotFoundError:
+        print("\n❌ 未检测到 tesseract（OCR 引擎）。第①阶段读数字需要它。")
+        print("   安装：Windows 装 UB-Mannheim/tesseract 安装包并加入 PATH；")
+        print("        macOS `brew install tesseract`；Ubuntu `sudo apt install tesseract-ocr`。")
+        print("   装好后重试。（其余阶段逻辑已就绪）")
+        sys.exit(3)
     words=[]
     for i in range(len(data['text'])):
         t=(data['text'][i] or '').strip()
@@ -184,7 +197,10 @@ def stage4_annotate(base_img, data, findings, out_png):
         cv2.rectangle(im,(x0-2,y0-2),(x1+2,y1+2),color,3)
         if passed is False:
             cv2.putText(im,"X >limit",(x0,max(0,y0-6)),cv2.FONT_HERSHEY_SIMPLEX,0.9,(0,0,230),2)
-    cv2.imwrite(out_png, im)
+    # OpenCV 在 Windows 写不了中文路径，用 imencode+tofile
+    ok, buf = cv2.imencode(".png", im)
+    if ok:
+        buf.tofile(out_png)
     return out_png
 
 

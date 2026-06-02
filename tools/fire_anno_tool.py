@@ -492,7 +492,10 @@ def _write_cvat(out_xml, img_name, W, H, text_boxes, lines, polys):
 
 
 def _overlay(img_path, out_dir, base, text_boxes, lines, polys, cv2, np):
-    im = cv2.imread(img_path)
+    # OpenCV 在 Windows 读不了中文路径，改用 fromfile+imdecode / imencode+tofile
+    im = cv2.imdecode(np.fromfile(img_path, dtype=np.uint8), cv2.IMREAD_COLOR)
+    if im is None:
+        print(f"[prelabel] (叠加预览跳过：底图读取失败 {img_path})"); return
     for (x0, y0, x1, y1) in text_boxes:
         cv2.rectangle(im, (int(x0), int(y0)), (int(x1), int(y1)), (0, 170, 170), 2)
     for (x0, y0, x1, y1) in lines:
@@ -500,7 +503,9 @@ def _overlay(img_path, out_dir, base, text_boxes, lines, polys, cv2, np):
     for poly in polys:
         cv2.polylines(im, [np.array(poly, np.int32)], True, (0, 0, 255), 3)
     p = os.path.join(out_dir, f"{base}_prelabel_overlay.jpg")
-    cv2.imwrite(p, im)
+    ok, buf = cv2.imencode(".jpg", im)
+    if ok:
+        buf.tofile(p)
     print(f"[prelabel] 叠加预览: {p}")
 
 

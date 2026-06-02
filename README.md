@@ -11,6 +11,16 @@ fire-review-mvp/
 ├── HANDOFF.md              交接文档（先读这个）
 ├── README.md              本文件（安装与用法）
 ├── requirements.txt
+├── app/                    🖥️ 桌面客户端（PySide6）
+│   ├── main.py             入口：python app/main.py
+│   ├── ui_common.py        公共件（主题/文件行/图查看器/日志/子进程执行器）
+│   ├── page_prepare.py     数据准备页（预标注/质检/转换）
+│   ├── page_e2e.py         端到端预审页
+│   ├── page_train.py       YOLO 训练页（建数据集/训练/评估）
+│   └── backend/
+│       ├── prelabel_pro.py   增强预标注（语义细分+内容+可审核）
+│       ├── build_dataset.py  CVAT 标注 → YOLO-seg 数据集
+│       └── train_yolo.py     ultralytics 训练/评估封装
 ├── tools/
 │   ├── fire_anno_tool.py   标注三件套：转换 / 质检 / 预标注
 │   ├── e2e_demo.py         端到端流程 demo
@@ -32,7 +42,30 @@ pip install -r requirements.txt
 #   Windows: 装 UB-Mannheim/tesseract 安装包并加入 PATH
 ```
 
-## 用法
+## 🖥️ 桌面客户端（推荐）
+
+把下面三块命令行能力包成了一个 PySide6 图形客户端，拖文件即可用：
+
+```bash
+pip install -r requirements.txt
+python app/main.py
+```
+
+三个标签页：
+
+| 页面 | 功能 | 对应脚本 |
+|---|---|---|
+| **数据准备** | 矢量 PDF 预标注 / 标注质检(QC) / 中英标签转换 | `tools/fire_anno_tool.py` |
+| **端到端预审** | 拖入 PDF 跑通五阶段，看标注图 + 结构化 JSON | `tools/e2e_demo.py` |
+| **YOLO 训练** | ① CVAT 标注→YOLO-seg 数据集 ② 训练 ③ 评估 | `app/backend/{build_dataset,train_yolo}.py` |
+
+特性：拖拽选文件、结果图可滚轮缩放、子进程跑任务+实时日志（不卡界面）、训练完自动展示
+`results.png`/混淆矩阵、建完数据集自动把 `data.yaml` 衔接到训练页。客户端只是 GUI 外壳，
+底层仍调用 `tools/` 与 `app/backend/` 的脚本，命令行用法不受影响。
+
+> 训练页需要 `ultralytics`（已加入 requirements）；有 GPU 更快，CPU 也能跑（慢）。首次训练会自动下载预训练权重。
+
+## 用法（命令行）
 
 ### 标注三件套 `fire_anno_tool.py`
 
@@ -43,12 +76,17 @@ python tools/fire_anno_tool.py convert  输入.xml  输出.xml
 # ② 质检：按 schema 查格式/几何/完整性/数量异常
 python tools/fire_anno_tool.py qc  标注.xml            # 自动判断总平面/站厅图
 
-# ③ 矢量预标注：从矢量PDF自动抽 文字块/线/区域候选 → CVAT预标 + 叠加预览
+# ③ 矢量预标注(基础版)：从矢量PDF自动抽 文字块/线/区域候选 → CVAT预标 + 叠加预览
 python tools/fire_anno_tool.py prelabel  矢量图纸.pdf  输出目录  --dpi 200
+
+# ③+ 增强预标注：语义细分 + 内容(OCR可选) + 置信度分级 + 确认清单 + 自检
+python app/backend/prelabel_pro.py  矢量图纸.pdf  输出目录  --type hall --ocr --qc
 
 # ④ 一条龙：convert 完接着 qc
 python tools/fire_anno_tool.py all  标注.xml
 ```
+
+> 预标注详细原理、参数、OCR 安装、人工确认流程见 **[docs/prelabel_guide.md](docs/prelabel_guide.md)**。
 
 质检能自动报出的典型问题：非法/中文标签、`.`等垃圾属性键、必填空值、枚举越界、必现类缺失（如周边建筑=0）、商铺超规范上限、设备区分区漏标等。
 

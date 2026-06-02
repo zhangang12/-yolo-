@@ -1,0 +1,22 @@
+# ===== 保密数据：图纸/标注源文件，绝不入库 =====
+*.pdf
+*.zip
+*.docx
+*.dwg
+docs/annotations*.xml
+docs/*_en.xml
+
+# ===== 训练/运行产物 =====
+runs/
+dataset/
+*.pt
+*_overlay.jpg
+*_prelabel.xml
+*_review.txt
+
+# ===== 临时/缓存 =====
+_t/
+_shot/
+__pycache__/
+*.pyc
+.DS_Store
