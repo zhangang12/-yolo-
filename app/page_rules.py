@@ -99,10 +99,19 @@ class RulesPage(QWidget):
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.verticalHeader().setVisible(False)
         self.table.setAlternatingRowColors(True)
+        self.table.setWordWrap(True)            # 长文本换行
         hdr = self.table.horizontalHeader()
-        hdr.setSectionResizeMode(2, QHeaderView.Stretch)
-        hdr.setSectionResizeMode(3, QHeaderView.Stretch)
-        hdr.setSectionResizeMode(6, QHeaderView.Stretch)
+        # ID/类别/强条 按内容；名称/判据/出处 固定可拖；适用条件占剩余并换行
+        hdr.setSectionResizeMode(0, QHeaderView.ResizeToContents)  # 规则ID
+        hdr.setSectionResizeMode(1, QHeaderView.ResizeToContents)  # 类别
+        hdr.setSectionResizeMode(2, QHeaderView.Interactive)       # 名称
+        hdr.setSectionResizeMode(3, QHeaderView.Interactive)       # 判据
+        hdr.setSectionResizeMode(4, QHeaderView.Stretch)           # 适用条件
+        hdr.setSectionResizeMode(5, QHeaderView.ResizeToContents)  # 强条
+        hdr.setSectionResizeMode(6, QHeaderView.Interactive)       # 出处
+        self.table.setColumnWidth(2, 150)
+        self.table.setColumnWidth(3, 190)
+        self.table.setColumnWidth(6, 200)
         right.addWidget(self.table)
         self.log = LogConsole(); right.addWidget(self.log)
         right.setSizes([560, 180])
@@ -155,10 +164,7 @@ class RulesPage(QWidget):
                 if j == 5:
                     it.setForeground(QColor("#ff6b6b") if mand else QColor("#ffa94d"))
                 self.table.setItem(i, j, it)
-        self.table.resizeColumnsToContents()
-        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
-        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
-        self.table.horizontalHeader().setSectionResizeMode(6, QHeaderView.Stretch)
+        self.table.resizeRowsToContents()       # 换行后按内容调整行高
 
     def _try_run(self):
         self.log.banner("用样例数据试跑规则引擎")
