@@ -62,11 +62,9 @@ class RulesPage(QWidget):
         left = card(); lv = QVBoxLayout(left); lv.setContentsMargins(18, 18, 18, 18); lv.setSpacing(12)
         lv.addWidget(h1("规则库"))
         lv.addWidget(hint(
-            "消防检查规则已结构化为「可执行规则」，由规则引擎逐条比对结构化数据。\n\n"
-            "• 确定性判定，不用 AI —— 可解释、可追溯，每条都挂规范出处。\n"
-            "• 强条(不应/不得/严禁)=critical；非强条(不宜/宜)=warning。\n"
-            "• 数据缺失时标“待复核”，既不误判合规也不误判违规。\n"
-            "• 扩规则只改 rules.json，不动代码。"))
+            "系统内置的消防检查规则，会自动逐条比对图纸数据。\n\n"
+            "• 按固定标准判定，每条都标明规范出处，结论可查可追溯。\n"
+            "• 图纸信息不足时标“待人工复核”，不乱判。"))
 
         self.stat = section("加载中…"); lv.addWidget(self.stat)
 
@@ -79,11 +77,11 @@ class RulesPage(QWidget):
         self.search.textChanged.connect(self._refilter)
         lv.addWidget(self.search)
 
-        lv.addWidget(section("强条 vs 非强条"))
-        lv.addWidget(hint("🔴 强条 critical：必须满足，违反即不通过。\n🟠 非强条 warning：宜满足，违反给提醒。"))
+        lv.addWidget(section("两类条文"))
+        lv.addWidget(hint("🔴 强制条文：必须满足，不满足即不通过。\n🟠 建议条文：宜满足，不满足给提醒。"))
 
         lv.addStretch(1)
-        self.try_btn = QPushButton("用样例数据试跑规则引擎"); self.try_btn.setObjectName("Primary")
+        self.try_btn = QPushButton("试运行（用示例数据演示）"); self.try_btn.setObjectName("Primary")
         self.try_btn.clicked.connect(self._try_run)
         lv.addWidget(self.try_btn)
         left.setFixedWidth(360)
@@ -92,7 +90,7 @@ class RulesPage(QWidget):
         # ---------- 右：规则表 + 日志 ----------
         right = QSplitter(Qt.Vertical)
         self.table = QTableWidget()
-        cols = ["规则ID", "类别", "名称", "判据", "适用条件", "强条", "出处"]
+        cols = ["规则ID", "类别", "名称", "判据", "适用条件", "条文", "出处"]
         self.table.setColumnCount(len(cols))
         self.table.setHorizontalHeaderLabels(cols)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -133,7 +131,7 @@ class RulesPage(QWidget):
         self.cat.blockSignals(False)
         n_crit = sum(1 for r in self.rules if r.get("mandatory"))
         self.stat.setText(f"共 {len(self.rules)} 条规则 · {len(cats)} 大类 · "
-                          f"强条 {n_crit} / 非强条 {len(self.rules)-n_crit}")
+                          f"强制 {n_crit} 条 / 建议 {len(self.rules)-n_crit} 条")
         self._refilter()
 
     def _refilter(self):
@@ -156,7 +154,7 @@ class RulesPage(QWidget):
             cells = [
                 r.get("rule_id", ""), r.get("category", ""), r.get("name", ""),
                 _check_str(r.get("check", {})), _applies_str(r.get("applies_when", [])),
-                "🔴强条" if mand else "🟠宜", r.get("source", ""),
+                "🔴强制" if mand else "🟠建议", r.get("source", ""),
             ]
             for j, txt in enumerate(cells):
                 it = QTableWidgetItem(str(txt))
@@ -167,5 +165,5 @@ class RulesPage(QWidget):
         self.table.resizeRowsToContents()       # 换行后按内容调整行高
 
     def _try_run(self):
-        self.log.banner("用样例数据试跑规则引擎")
+        self.log.banner("试运行：用示例数据演示规则判定")
         self.runner.run(ENGINE, [RULES_JSON, "--data", SAMPLE])
