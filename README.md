@@ -54,12 +54,13 @@ pip install -r requirements.txt
 python app/main.py
 ```
 
-三个标签页：
+四个标签页：
 
 | 页面 | 功能 | 对应脚本 |
 |---|---|---|
 | **数据准备** | 矢量 PDF 预标注 / 标注质检(QC) / 中英标签转换 | `tools/fire_anno_tool.py` |
 | **端到端预审** | 拖入 PDF 跑通五阶段，看标注图 + 结构化 JSON | `tools/e2e_demo.py` |
+| **规则库** | 展示已结构化的 32 条消防检查规则，可按类别筛选/搜索/用样例数据试跑 | `tools/rule_engine.py` + `rules/rules.json` |
 | **YOLO 训练** | ① CVAT 标注→YOLO-seg 数据集 ② 训练 ③ 评估 | `app/backend/{build_dataset,train_yolo}.py` |
 
 特性：拖拽选文件、结果图可滚轮缩放、子进程跑任务+实时日志（不卡界面）、训练完自动展示

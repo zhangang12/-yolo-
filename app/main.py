@@ -28,6 +28,7 @@ from ui_common import THEME
 from page_prepare import PreparePage
 from page_e2e import E2EPage
 from page_train import TrainPage
+from page_rules import RulesPage
 
 
 class MainWindow(QMainWindow):
@@ -50,6 +51,7 @@ class MainWindow(QMainWindow):
         pages = [
             ("数据准备", PreparePage(ROOT)),
             ("端到端预审", E2EPage(ROOT)),
+            ("规则库", RulesPage(ROOT)),
             ("YOLO 训练", TrainPage(ROOT)),
         ]
         self.bg = QButtonGroup(self); self.bg.setExclusive(True)

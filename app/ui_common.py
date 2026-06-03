@@ -65,6 +65,18 @@ QComboBox, QSpinBox {
 }
 QComboBox:focus, QSpinBox:focus { border: 1px solid #4f8cff; }
 QComboBox QAbstractItemView { background: #1a1e29; selection-background-color: #4f8cff; border: 1px solid #313a4f; }
+/* 表格（规则库） */
+QTableWidget {
+    background: #11141c; alternate-background-color: #161a24; gridline-color: #232838;
+    border: 1px solid #232838; border-radius: 10px; color: #d7dcea;
+    selection-background-color: #21314e; selection-color: #ffffff;
+}
+QTableWidget::item { padding: 5px 8px; }
+QHeaderView::section {
+    background: #1b2030; color: #aab2c5; padding: 7px 8px; border: none;
+    border-right: 1px solid #232838; border-bottom: 1px solid #2b3243; font-weight: 600;
+}
+
 QScrollBar:vertical { background: transparent; width: 10px; margin: 2px; }
 QScrollBar::handle:vertical { background: #2f3a52; border-radius: 5px; min-height: 30px; }
 QScrollBar::add-line, QScrollBar::sub-line { height: 0; }
