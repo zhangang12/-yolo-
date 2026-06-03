@@ -82,7 +82,7 @@ class E2EPage(QWidget):
         for i, m in enumerate(marks):
             if m in s:
                 self.stage_labels[i].setText("●  " + STAGES[i])
-                self.stage_labels[i].setStyleSheet("color:#4f8cff;")
+                self.stage_labels[i].setStyleSheet("color:#2f6fed;")
 
     def _on_finished(self, code):
         self._set_running(False)

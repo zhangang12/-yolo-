@@ -160,7 +160,7 @@ class RulesPage(QWidget):
                 it = QTableWidgetItem(str(txt))
                 it.setToolTip(r.get("message", "") if j == 2 else str(txt))
                 if j == 5:
-                    it.setForeground(QColor("#ff6b6b") if mand else QColor("#ffa94d"))
+                    it.setForeground(QColor("#e03131") if mand else QColor("#e8590c"))
                 self.table.setItem(i, j, it)
         self.table.resizeRowsToContents()       # 换行后按内容调整行高
 
