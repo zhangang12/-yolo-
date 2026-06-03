@@ -9,7 +9,7 @@ from ui_common import (card, h1, hint, section, PathRow, ImageViewer, LogConsole
 
 TOOL = "tools/e2e_demo.py"
 
-STAGES = ["① 识别 (YOLO占位+OCR)", "② 结构化 (比例尺/面积/距离)",
+STAGES = ["① 识别 (文字层直读 / OCR)", "② 结构化 (面积/类型/距离)",
           "③ 规范比对 (规则引擎)", "④ 原图标注 (回写)"]
 
 
@@ -27,7 +27,7 @@ class E2EPage(QWidget):
         left = card(); lv = QVBoxLayout(left); lv.setContentsMargins(18, 18, 18, 18); lv.setSpacing(12)
         lv.addWidget(h1("端到端预审 Demo"))
         lv.addWidget(hint("矢量 PDF 一条龙跑通五阶段，产出结构化 JSON + 标注版 PNG/PDF。\n"
-                          "⚠️ 当前“识别”为矢量粗提取+OCR，含噪声，仅演示流程，不代表审查准确。"))
+                          "优先读图纸文字层：防火分区面积精确、带规范出处；图纸未写明面积时回退 OCR 识别（含噪声）。"))
 
         self.pdf = PathRow("矢量 PDF", "pdf", "PDF (*.pdf)")
         self.out = PathRow("输出目录", "dir")
@@ -75,14 +75,19 @@ class E2EPage(QWidget):
         self._set_running(True)
         self.runner.run(TOOL, [pdf, out, "--page", self.page.value(), "--dpi", self.dpi.value()])
 
+    def _light(self, i):
+        self.stage_labels[i].setText("●  " + STAGES[i])
+        self.stage_labels[i].setStyleSheet("color:#2f6fed;")
+
     def _on_output(self, s):
         self.log.append_text(s)
         # 依据脚本打印的阶段标记点亮指示灯
+        if "[①②文字层直读]" in s:        # 文字层模式一次点亮 ①②
+            self._light(0); self._light(1)
         marks = ["[①识别]", "[②结构化]", "[③规范比对]", "[④原图标注]"]
         for i, m in enumerate(marks):
             if m in s:
-                self.stage_labels[i].setText("●  " + STAGES[i])
-                self.stage_labels[i].setStyleSheet("color:#2f6fed;")
+                self._light(i)
 
     def _on_finished(self, code):
         self._set_running(False)

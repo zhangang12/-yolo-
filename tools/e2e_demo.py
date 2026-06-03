@@ -229,6 +229,26 @@ def stage4_annotate(base_img, data, findings, out_png):
     return out_png
 
 
+def stage4_annotate_vector(base_img, vec, fc_findings, sc, out_png):
+    """文字层直读模式的标注：在每个分区的面积文字处画框 + 判定结果。"""
+    import cv2, numpy as np
+    im = np.array(base_img)[:, :, ::-1].copy()
+    pass_map = {f["target_id"]: f["passed"] for f in fc_findings}
+    for fc in vec["fire_compartment"]:
+        x0, y0, x1, y1 = [v * sc for v in fc["_bbox"]]
+        passed = pass_map.get(fc["id"])
+        color = (0, 160, 0) if passed is True else ((0, 0, 230) if passed is False else (0, 180, 220))
+        tag = "OK" if passed is True else ("NG>limit" if passed is False else "?review")
+        cv2.rectangle(im, (int(x0) - 3, int(y0) - 3), (int(x1) + 3, int(y1) + 3), color, 2)
+        # cv2 画不出中文，用英文+面积值
+        cv2.putText(im, f"{fc['area_m2']}m2 {tag}", (int(x0), max(0, int(y0) - 6)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+    ok, buf = cv2.imencode(".png", im)
+    if ok:
+        buf.tofile(out_png)
+    return out_png
+
+
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("pdf"); ap.add_argument("out", nargs="?", default=".")
@@ -248,6 +268,48 @@ def main():
     pix,sc=render(page,a.dpi); Wp,Hp=pix.width,pix.height
     print(f"[拖入] {os.path.basename(a.pdf)}  第{a.page}页  {Wp}x{Hp}px")
 
+    # ===== 优先：文字层直读（①+② 捷径，对“图纸已写明面积”精确无噪声）=====
+    import vector_extract
+    from PIL import Image
+    print("[①②文字层直读] 解析文字层中的防火分区面积 ...")
+    vec = vector_extract.extract(a.pdf, a.page)
+    if vec["fire_compartment"]:
+        if station_meta:
+            vec["station"] = station_meta
+        print(f"        读到防火分区 {len(vec['fire_compartment'])} 个（设计院声称值，未经几何复核）")
+        for c in vec["_consistency"]:
+            print(f"        · {c}")
+        print("[③规范比对] 撞规则 ...")
+        findings = rule_engine.evaluate(a.rules, vec)
+        fc = [f for f in findings if f["target_type"] == "fire_compartment"]
+        nfail = sum(1 for f in fc if f["passed"] is False)
+        nrev = sum(1 for f in fc if f["review_required"])
+        for f in fc:
+            icon = "❌" if f["passed"] is False else ("⚠️ " if f["review_required"] else "✅")
+            mark = "[强]" if f["mandatory"] else "[宜]"
+            print(f"        {icon} {mark} {f['rule_id']}  {f['target_id']} {f['value']}㎡ ≤{f['threshold']}")
+            print(f"            来源: {f['source']}")
+        print(f"        共 {len(fc)} 项检查, {nfail} 项不合规, {nrev} 项待人工复核")
+        print("[④原图标注] 标回原图 ...")
+        out_png = os.path.join(a.out, "e2e_annotated.png")
+        base_img = Image.open(io.BytesIO(pix.tobytes("png"))).convert("RGB")
+        stage4_annotate_vector(base_img, vec, fc, sc, out_png)
+        clean = dict(
+            source="vector_text", drawing=vec["drawing"],
+            fire_compartment=[{k: v for k, v in f.items() if not k.startswith("_")}
+                              for f in vec["fire_compartment"]],
+            consistency=vec["_consistency"], findings=fc)
+        json.dump(clean, open(os.path.join(a.out, "e2e_structured.json"), "w", encoding="utf-8"),
+                  ensure_ascii=False, indent=2)
+        try:
+            Image.open(out_png).convert("RGB").save(os.path.join(a.out, "e2e_annotated.pdf"))
+        except Exception as e:
+            print("   (PDF导出跳过:", e, ")")
+        print("[完成] 文字层直读模式。结构化: e2e_structured.json  标注图: e2e_annotated.png/.pdf")
+        return
+
+    print("        文字层未发现防火分区面积，回退 OCR 识别流程。")
+    # ===== 回退：OCR 识别（噪声较多，仅演示流程）=====
     print("[①识别] 抽取矢量区域 + OCR 文字数字 ...")
     regions, ocr_items, base_img = stage1_recognize(page, sc, Wp, Hp)
     print(f"        区域候选 {len(regions)}  OCR数字 {len(ocr_items)} 个")
@@ -280,7 +342,7 @@ def main():
     # 导出 JSON 与 标注版PDF
     clean={k:v for k,v in data.items() if not k.startswith("_")}
     clean["findings"]=findings
-    json.dump(clean, open(os.path.join(a.out,"e2e_structured.json"),"w"),
+    json.dump(clean, open(os.path.join(a.out,"e2e_structured.json"),"w", encoding="utf-8"),
               ensure_ascii=False, indent=2)
     # png -> pdf
     try:
