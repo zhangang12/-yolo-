@@ -36,6 +36,7 @@
 | `corridor` | 走道/楼梯 | `id`, `kind`(`evac_corridor`/`evac_stair`/`equip_corridor_single`/`equip_corridor_double`/`entrance_passage`), `clear_width_m`, `length_m` |
 | `shop` | 商铺 | `id`, `area_m2` |
 | `shop_pair` | 商铺两两组合 | `id`, `shop_a`, `shop_b`, `opening_distance_m` |
+| `fire_shutter` | 防火卷帘 | `id`, `opening_width_m`(洞口宽), `shutter_width_m`(卷帘宽) |
 | `vent_pair` | 风口两两组合 | `id`, `kind`(`fresh_vs_exhaust_or_piston` 等), `distance_m` |
 | `building_clearance` | 出入口/风亭→周边建筑 防火间距 | `id`, `building_name`, `building_category`(`多层民用`/`高层民用`/`加油加气加氢站`), `distance_m`, `nearest_kind` |
 | `station` | 站点全局对象 | `type`(`underground`/`at_grade`/`elevated`), `height_m`, `transfer_lines`, `public_zone`(含 `exits`, `commercial_shops`, `area_m2`), `equipment_zone` |
@@ -65,7 +66,7 @@
 
 ## 五、`check` 判据
 
-两种类型：
+三种类型：
 
 ### 5.1 `compare`：单字段对比
 ```json
@@ -74,6 +75,15 @@
   "path": "target.area_m2",
   "op": "le",
   "threshold": 1500
+}
+```
+
+**动态阈值**（阈值由数据字段算出，如卷帘"≤洞口宽/3 且 ≤20m"）：用
+`threshold_path` 取阈值来源字段，可选 `threshold_scale`(乘系数) / `threshold_divisor`(除以) / `threshold_cap`(封顶)。
+```json
+"check": {
+  "type": "compare", "path": "target.shutter_width_m", "op": "le",
+  "threshold_path": "target.opening_width_m", "threshold_divisor": 3, "threshold_cap": 20
 }
 ```
 
@@ -89,6 +99,19 @@
 ```
 
 `filter` 内用 `item.<field>` 引用集合元素字段。`filter` 可省略（全计数）。
+
+### 5.3 `sum_aggregate`：集合字段求和对比
+```json
+"check": {
+  "type": "sum_aggregate",
+  "collection_path": "target.public_zone.commercial_shops",
+  "field": "area_m2",
+  "op": "le",
+  "threshold": 100
+}
+```
+
+对集合内每个元素的 `field` 求和后比阈值（如商铺总面积 ≤100㎡）。可选 `filter`（同 count）。
 
 ## 六、评估结果
 

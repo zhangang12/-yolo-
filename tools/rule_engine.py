@@ -86,6 +86,22 @@ def _eval_check(rule, contexts):
 
     if ctype == 'compare':
         threshold = check.get('threshold')
+        # 动态阈值：从数据字段取阈值（如卷帘“≤洞口宽/3”），可乘系数、可封顶
+        if 'threshold_path' in check:
+            tv = _resolve(check['threshold_path'], contexts)
+            if tv is _MISSING or tv is None:
+                return dict(passed=None, value=None, threshold=None,
+                            review_required=True, reason=f"缺少阈值字段 {check['threshold_path']}")
+            try:
+                threshold = tv * check.get('threshold_scale', 1)
+                if 'threshold_divisor' in check:
+                    threshold = tv / check['threshold_divisor']
+                if 'threshold_cap' in check:
+                    threshold = min(threshold, check['threshold_cap'])
+                threshold = round(threshold, 3)
+            except TypeError as e:
+                return dict(passed=None, value=tv, threshold=None,
+                            review_required=True, reason=f"阈值字段类型不匹配: {e}")
         val = _resolve(check['path'], contexts)
         if val is _MISSING or val is None:
             return dict(passed=None, value=None, threshold=threshold,
@@ -116,6 +132,34 @@ def _eval_check(rule, contexts):
                 count += 1
         passed = OPS[op](count, threshold)
         return dict(passed=bool(passed), value=count, threshold=threshold,
+                    review_required=False, reason=None)
+
+    if ctype == 'sum_aggregate':
+        # 对集合内某字段求和后比阈值（如商铺总面积 ≤100㎡）
+        threshold = check.get('threshold')
+        coll = _resolve(check['collection_path'], contexts)
+        if coll is _MISSING or coll is None:
+            return dict(passed=None, value=None, threshold=threshold,
+                        review_required=True, reason=f"缺少集合 {check['collection_path']}")
+        if not isinstance(coll, (list, tuple)):
+            return dict(passed=None, value=None, threshold=threshold,
+                        review_required=True, reason=f"{check['collection_path']} 不是数组")
+        field = check['field']
+        filters = check.get('filter', [])
+        total = 0
+        for item in coll:
+            item_ctx = dict(contexts)
+            item_ctx['item'] = item
+            if not all(_check_cond(f, item_ctx) for f in filters):
+                continue
+            fv = _resolve('item.' + field, item_ctx)
+            if fv is _MISSING or fv is None:
+                return dict(passed=None, value=None, threshold=threshold,
+                            review_required=True, reason=f"集合元素缺字段 {field}")
+            total += fv
+        total = round(total, 2)
+        passed = OPS[op](total, threshold)
+        return dict(passed=bool(passed), value=total, threshold=threshold,
                     review_required=False, reason=None)
 
     raise ValueError(f"未知 check.type={ctype}")

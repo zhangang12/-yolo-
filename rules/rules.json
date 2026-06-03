@@ -737,6 +737,72 @@
       "severity": "critical",
       "source": "GB 50156-2021 4.0.4 注3",
       "message": "出入口 与 [{target.building_name}](加油加气加氢站) 安全间距 {value}m（规范要求≥{threshold}m）"
+    },
+    {
+      "rule_id": "SHOP-AREA-TOTAL-PUB-001",
+      "name": "公共区商铺总面积",
+      "category": "商铺",
+      "target": "station",
+      "applies_when": [],
+      "check": {
+        "type": "sum_aggregate",
+        "collection_path": "target.public_zone.commercial_shops",
+        "field": "area_m2",
+        "op": "le",
+        "threshold": 100
+      },
+      "mandatory": true,
+      "severity": "critical",
+      "source": "设计要点·商业服务设施",
+      "message": "公共区商铺总面积 {value}㎡ > 上限 100㎡"
+    },
+    {
+      "rule_id": "SHUTTER-WIDTH-LE30-001",
+      "name": "防火卷帘宽度(洞口≤30m)",
+      "category": "防火门窗卷帘",
+      "target": "fire_shutter",
+      "applies_when": [
+        {
+          "path": "target.opening_width_m",
+          "op": "le",
+          "value": 30
+        }
+      ],
+      "check": {
+        "type": "compare",
+        "path": "target.shutter_width_m",
+        "op": "le",
+        "threshold": 10
+      },
+      "mandatory": true,
+      "severity": "critical",
+      "source": "GB 50016-2014 6.5.3-1",
+      "message": "防火卷帘 {target.id} 宽度 {value}m > 10m(洞口≤30m 部位上限)"
+    },
+    {
+      "rule_id": "SHUTTER-WIDTH-GT30-001",
+      "name": "防火卷帘宽度(洞口>30m)",
+      "category": "防火门窗卷帘",
+      "target": "fire_shutter",
+      "applies_when": [
+        {
+          "path": "target.opening_width_m",
+          "op": "gt",
+          "value": 30
+        }
+      ],
+      "check": {
+        "type": "compare",
+        "path": "target.shutter_width_m",
+        "op": "le",
+        "threshold_path": "target.opening_width_m",
+        "threshold_cap": 20,
+        "threshold_divisor": 3
+      },
+      "mandatory": true,
+      "severity": "critical",
+      "source": "GB 50016-2014 6.5.3-1",
+      "message": "防火卷帘 {target.id} 宽度 {value}m > {threshold}m(洞口>30m 部位≤宽度/3 且≤20m)"
     }
   ]
 }

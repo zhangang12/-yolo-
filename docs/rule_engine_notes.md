@@ -4,7 +4,7 @@
 
 提供的《消防检查规则》是一份**规范条文汇编**（四列：审查内容/适用规范/条款/审查解析），覆盖防火间距、防火分区、安全疏散、防火门窗卷帘、防排烟等。内容全、解析到位，但**不是"可执行规则"**，需要先按"适用条件 → 判据"拆条目，再喂引擎。
 
-> 2026-06 更新：规则引擎已在仓库落地，详见 [`rules/schema.md`](../rules/schema.md)、[`rules/rules.json`](../rules/rules.json)、[`tools/rule_engine.py`](../tools/rule_engine.py)。已支持 26 条 MVP 规则，覆盖防火分区面积、安全疏散、疏散宽度、安全出口、商铺、防火门开启、风口距离。
+> 2026-06 更新：规则引擎已在仓库落地，详见 [`rules/schema.md`](../rules/schema.md)、[`rules/rules.json`](../rules/rules.json)、[`tools/rule_engine.py`](../tools/rule_engine.py)。已支持 **32 条** MVP 规则，覆盖防火分区面积、安全疏散、疏散宽度、安全出口、商铺（含总面积聚合）、防火门开启、防火卷帘宽度、风口距离、防火间距。
 
 ## 二、初版评审发现的问题（已按现行口径修正）
 
@@ -53,7 +53,8 @@
 
 - **门净宽 = 洞口宽 − 150mm**（`WIDTH-DOOR-EVAC-001` 在 source 注明）。
 - **楼梯净宽 = 梯段宽 − 100mm**（`WIDTH-STAIR-EVAC-001` 同上）。
-- **商铺三限一距**：≤3 个 / 总 ≤100㎡ / 单个 ≤30㎡ / 开口间距 ≥8m（`SHOP-COUNT-PUB-001` / `SHOP-AREA-EACH-001` / `SHOP-OPENING-DIST-001`；总面积 ≤100㎡ 的聚合规则待补）。
+- **商铺三限一距**：≤3 个 / 总 ≤100㎡ / 单个 ≤30㎡ / 开口间距 ≥8m（`SHOP-COUNT-PUB-001` / `SHOP-AREA-TOTAL-PUB-001`(聚合) / `SHOP-AREA-EACH-001` / `SHOP-OPENING-DIST-001`）。
+- **防火卷帘宽度**：洞口≤30m 部位卷帘宽 ≤10m；洞口>30m 部位 ≤洞口宽/3 且 ≤20m（`SHUTTER-WIDTH-LE30-001` / `SHUTTER-WIDTH-GT30-001`，后者用动态阈值 `threshold_divisor`+`threshold_cap`）。
 
 ## 三、规则表 Schema（已实现）
 
@@ -96,7 +97,7 @@
 }
 ```
 
-## 四、MVP 已实现的 26 条规则
+## 四、MVP 已实现的 32 条规则
 
 | 类别 | 条目数 | 主要规则 ID |
 |---|---|---|
@@ -105,19 +106,21 @@
 | 安全出口 | 4 | `EXIT-NUM-PUB-001`(≥2), `EXIT-NUM-EQUIP-001`(≥2), `EXIT-DIST-SAME-DIR-001`(≥10m), `EXIT-DIST-ADJ-001`(≥20m) |
 | 疏散宽度 | 5 | `WIDTH-DOOR-EVAC-001`(≥0.9m), `WIDTH-CORR-EVAC-001`(≥1.10m), `WIDTH-STAIR-EVAC-001`(≥1.10m), `WIDTH-EQUIP-CORR-SINGLE-001`(≥1.2m), `WIDTH-EQUIP-CORR-DOUBLE-001`(≥1.5m) |
 | 通道长度 | 1 | `CORR-UG-ENTRANCE-LEN-001`(≤100m, 不宜) |
-| 防火门窗卷帘 | 1 | `DOOR-SWING-EVAC-001`（开启方向=evacuation） |
-| 商铺 | 3 | `SHOP-COUNT-PUB-001`(≤3), `SHOP-AREA-EACH-001`(≤30㎡), `SHOP-OPENING-DIST-001`(≥8m) |
+| 防火门窗卷帘 | 3 | `DOOR-SWING-EVAC-001`（开启方向=evacuation）, `SHUTTER-WIDTH-LE30-001`(洞口≤30m→卷帘≤10m), `SHUTTER-WIDTH-GT30-001`(洞口>30m→≤洞口/3 且≤20m) |
+| 商铺 | 4 | `SHOP-COUNT-PUB-001`(≤3), `SHOP-AREA-TOTAL-PUB-001`(总≤100㎡,聚合), `SHOP-AREA-EACH-001`(≤30㎡), `SHOP-OPENING-DIST-001`(≥8m) |
 | 防排烟 | 1 | `VENT-FRESH-DIST-001`（新风与排风/活塞风口 ≥10m） |
+| 防火间距 | 3 | `CLEARANCE-MULTI-001`(≥6m), `CLEARANCE-HIGH-001`(≥9m), `CLEARANCE-GAS-001`(≥50m) |
 
 ## 五、还没做的（路线图）
 
 | 项 | 状态 | 说明 |
 |---|---|---|
-| 防火间距规则（表 5.2.2 / 表 3.1.2） | 未做 | 数据依赖周边建筑标注（`surrounding_building`），当前标注还没覆盖；规则结构已设计好，等数据 |
-| 商铺总面积 ≤100㎡（聚合） | 未做 | 引擎需扩 `sum_aggregate` 算子；逻辑简单，待补 |
+| 防火间距规则（表 5.2.2） | ✅ 已做（2026-06） | 3 条接入 rule_engine + `fangju_demo.py`；判据就绪，等 `surrounding_building` 标注数据 |
+| 商铺总面积 ≤100㎡（聚合） | ✅ 已做（2026-06） | 引擎新增 `sum_aggregate` 算子，`SHOP-AREA-TOTAL-PUB-001` |
+| 防火卷帘宽度（≤30m 部位 ≤10m；>30m 部位 ≤宽度/3 且 ≤20m） | ✅ 已做（2026-06） | `SHUTTER-WIDTH-LE30/GT30-001`，引擎新增动态阈值 `threshold_divisor`/`threshold_cap`；等卷帘标签数据 |
+| 表 3.1.2 采光窗井与相邻地面建筑 | 未做 | 数据依赖窗井标注 |
 | 4min/6min 疏散能力（需客流量） | super_scope | 几何识别范围之外，标注 `review_required` |
 | 构造材料类（防火墙 3h、甲级门、A 级装修等） | super_scope | 同上，靠人工或专门字段 |
-| 防火卷帘宽度（≤30m 部位 ≤10m；>30m 部位 ≤宽度/3 且 ≤20m） | 未做 | 等卷帘标签数据 |
 
 ## 六、关键原则（不变）
 
