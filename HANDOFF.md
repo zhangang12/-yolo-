@@ -10,7 +10,7 @@
 |---|---|---|
 | 1 | 训练 AI 识别 5 类元素（区域/出口楼梯等/防火分区+OCR/尺寸+OCR/疏散路径） | 🟡 数据标注中，模型未训练 |
 | 2 | 提取元素 → 结构化数据 → 检测：分区闭合、面积超限、疏散距离、净宽、门开启方向 | 🟢 流程跑通，精度待提升 |
-| 3 | 结构化数据与消防规范比对，问题分类 | 🟡 规则引擎仅 demo 2 条，规范待结构化 |
+| 3 | 结构化数据与消防规范比对，问题分类 | 🟢 规则引擎已结构化 29 条 MVP 规则（见 `rules/rules.json`），覆盖 7 大类（含防火间距） |
 | 4 | 在 PDF 原图标注问题位置 | 🟢 已实现（见 e2e_demo） |
 
 ---
@@ -51,11 +51,14 @@
 **🟡 跑通但精度待提升**
 - "识别"环节当前是"矢量粗提取 + 数字 OCR"，**没有训练好的 YOLO**，所以 OCR 会混入噪声（把网格尺寸误当面积等）。**demo 证明的是"管路通"，不是"审得准"。**
 
+**🟢 新增完成（2026-06）**
+- **规则引擎**：`tools/rule_engine.py` + `rules/rules.json` + `rules/schema.md`。29 条 MVP 规则覆盖防火分区面积（含地下/地上/高架/两线换乘/三线换乘等分支）、安全疏散、安全出口（10m同方向/20m相邻）、疏散宽度、商铺三限一距、风口距离、门开启方向、**防火间距**（多层≥6m/高层≥9m/加油加气加氢站≥50m）。已接入 `e2e_demo.py`（防火分区面积/疏散距离）与 `fangju_demo.py`（防火间距）。
+
 **🔴 未开始**
 - YOLO 模型训练（数据在标注中）。
-- 规则引擎：把整本《消防检查规则》结构化为可执行规则（现仅 2 条 demo）。
 - 疏散路径算法。
 - 真实矢量几何精提取（替代 OCR 噪声）。
+- ~~防火间距规则~~ ✅ 已完成（2026-06）：3 条规则接入 rule_engine + `fangju_demo.py`。
 
 ---
 
@@ -64,8 +67,12 @@
 | 文件 | 作用 | 入口 |
 |---|---|---|
 | `tools/fire_anno_tool.py` | **标注三件套**：中英转换(带漏转自检) / 质检 / 矢量预标注 | `python fire_anno_tool.py {convert,qc,prelabel,all} ...` |
-| `tools/e2e_demo.py` | **端到端流程** demo：识别→结构化→比对→标注 | `python e2e_demo.py 图纸.pdf 输出目录` |
+| `tools/e2e_demo.py` | **端到端流程** demo：识别→结构化→比对→标注 | `python e2e_demo.py 图纸.pdf 输出目录 [--rules rules.json] [--station meta.json]` |
 | `tools/e2e_steps.py` | 分步执行版（绕开受限环境的单步超时；本机可忽略，直接用 e2e_demo） | `python e2e_steps.py {geom,ocr,asm} 缓存目录` |
+| `tools/rule_engine.py` | **规则引擎**：读 rules.json，对结构化数据评估，输出 finding | `python rule_engine.py rules/rules.json --data examples/sample_structured.json` |
+| `rules/rules.json` | 规则数据（29 条 MVP） | — |
+| `rules/schema.md` | 规则 schema 文档 | — |
+| `examples/sample_structured.json` | 覆盖全部规则分支的样例数据 | 用于回归测试 |
 
 用法详见 `README.md`。
 
@@ -121,9 +128,10 @@
 
 1. **凑齐各站矢量源文件（DWG/矢量PDF）** → 让预标注真正减负，并支撑几何精提取。
 2. **YOLO 数据集就绪**：按 `docs/label_schema.md` 切片标注，每类 ≥150–300 实例 → 训练 YOLO-seg。详见 `docs/yolo_training_guide.md`（如未生成，见本文件第 10 节）。
-3. **规则引擎结构化**：把《消防检查规则》按"检查项/适用条件/输入字段/判据/阈值/强条/出处"七列做成可执行规则表，先做 MVP 5 条（面积、疏散距离、净宽、出口个数间距、门开启方向）。
+3. ~~**规则引擎结构化**~~ ✅ 已完成（2026-06）。29 条规则覆盖 7 大类（含防火间距），详见 `docs/rule_engine_notes.md`。剩余扩展项：商铺总面积聚合规则、防火卷帘宽度。
 4. **几何精提取替代 OCR 噪声**：按颜色/图层抽防火分区边界、按就近抽尺寸，提升识别准确率。
 5. **疏散路径算法**：可通行区域栅格化 + A*。
+6. **结构化数据 schema 与标注产出对齐**：让标注（CVAT/YOLO 输出）直接映射到 `rules/schema.md` 定义的 `fire_compartment` / `door` / `exit` / `corridor` 等对象，规则引擎才能跑在真实数据上而不是"扁平 OCR + 适配器猜测"。
 
 ---
 

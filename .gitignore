@@ -1,22 +1,46 @@
-# ===== 保密数据：图纸/标注源文件，绝不入库 =====
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# ===== 保密图纸/业务数据（不入库，新成员单独索取）=====
 *.pdf
+*.dwg
+*.dxf
 *.zip
 *.docx
-*.dwg
+*.jpg
+*.jpeg
+*.png
+# 例外：示例 JSON 与文档可入
+!examples/*.json
+
+# 标注原始件
+annotations.xml
 docs/annotations*.xml
 docs/*_en.xml
+*.cvat
 
-# ===== 训练/运行产物 =====
+# ===== 训练 / 运行产物 =====
 runs/
 dataset/
 *.pt
 *_overlay.jpg
 *_prelabel.xml
 *_review.txt
+e2e_out/
+e2e_cache/
+out/
+*.log
 
-# ===== 临时/缓存 =====
+# 临时/缓存
 _t/
 _shot/
-__pycache__/
-*.pyc
+
+# 编辑器/系统
+.vscode/
+.idea/
 .DS_Store
+Thumbs.db

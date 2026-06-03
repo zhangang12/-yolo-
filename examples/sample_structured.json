@@ -1,0 +1,73 @@
+{
+  "_comment": "覆盖所有规则分支的样例结构化数据，用于回归测试。一份数据混了多个场景，因此 station 同时配两种身份信息（取并集），实际单个项目的 station 只会属于一种。",
+  "station": {
+    "type": "underground",
+    "height_m": 0,
+    "transfer_lines": 1,
+    "public_zone": {
+      "exits": [
+        {"id": "EX-1", "leads_to": "ground"}
+      ],
+      "commercial_shops": [
+        {"id": "SHOP-A"}, {"id": "SHOP-B"}, {"id": "SHOP-C"}, {"id": "SHOP-D"}
+      ]
+    },
+    "equipment_zone": {
+      "exits": [
+        {"id": "EX-E1"}
+      ]
+    }
+  },
+  "fire_compartment": [
+    {"id": "FC-PUB-OK",   "area_m2": 4800, "zone_type": "public",    "is_shared_concourse": false},
+    {"id": "FC-PUB-WARN", "area_m2": 5600, "zone_type": "public",    "is_shared_concourse": false},
+    {"id": "FC-EQ-UG-OK", "area_m2": 1400, "zone_type": "equipment"},
+    {"id": "FC-EQ-UG-NG", "area_m2": 1820, "zone_type": "equipment"}
+  ],
+  "evac_distance_line": [
+    {"id": "EVAC-OK", "length_m": 42, "kind": "any_to_exit"},
+    {"id": "EVAC-NG", "length_m": 55, "kind": "any_to_exit"}
+  ],
+  "exit_pair": [
+    {"id": "EP-SAME-OK", "exit_a": "EX-1", "exit_b": "EX-2", "relation": "same_direction", "distance_m": 12},
+    {"id": "EP-SAME-NG", "exit_a": "EX-3", "exit_b": "EX-4", "relation": "same_direction", "distance_m": 8},
+    {"id": "EP-ADJ-OK",  "exit_a": "EX-5", "exit_b": "EX-6", "relation": "adjacent",       "distance_m": 25},
+    {"id": "EP-ADJ-NG",  "exit_a": "EX-7", "exit_b": "EX-8", "relation": "adjacent",       "distance_m": 18}
+  ],
+  "door": [
+    {"id": "D-OK", "clear_width_m": 0.95, "swing_direction": "evacuation", "is_evacuation": true,
+     "zone": "public", "position": "other"},
+    {"id": "D-NARROW", "clear_width_m": 0.85, "swing_direction": "evacuation", "is_evacuation": true,
+     "zone": "public", "position": "other"},
+    {"id": "D-REVERSE", "clear_width_m": 1.00, "swing_direction": "reverse", "is_evacuation": true,
+     "zone": "public", "position": "other"},
+    {"id": "D-EQ-BETWEEN-OK", "clear_width_m": 1.0, "swing_direction": "evacuation", "is_evacuation": true,
+     "zone": "equipment", "position": "between_exits", "distance_to_nearest_exit_m": 35},
+    {"id": "D-EQ-BETWEEN-NG", "clear_width_m": 1.0, "swing_direction": "evacuation", "is_evacuation": true,
+     "zone": "equipment", "position": "between_exits", "distance_to_nearest_exit_m": 45},
+    {"id": "D-EQ-DEADEND-NG", "clear_width_m": 1.0, "swing_direction": "evacuation", "is_evacuation": true,
+     "zone": "equipment", "position": "dead_end", "distance_to_nearest_exit_m": 28}
+  ],
+  "corridor": [
+    {"id": "C-EVAC-OK",         "kind": "evac_corridor",         "clear_width_m": 1.5, "length_m": 30},
+    {"id": "C-EVAC-NG",         "kind": "evac_corridor",         "clear_width_m": 1.0, "length_m": 30},
+    {"id": "C-STAIR-OK",        "kind": "evac_stair",            "clear_width_m": 1.4, "length_m": 5},
+    {"id": "C-EQ-SINGLE-NG",    "kind": "equip_corridor_single", "clear_width_m": 1.0, "length_m": 20},
+    {"id": "C-EQ-DOUBLE-NG",    "kind": "equip_corridor_double", "clear_width_m": 1.3, "length_m": 20},
+    {"id": "C-ENTRANCE-LONG",   "kind": "entrance_passage",      "clear_width_m": 2.0, "length_m": 120}
+  ],
+  "shop": [
+    {"id": "SHOP-A", "area_m2": 28},
+    {"id": "SHOP-B", "area_m2": 35},
+    {"id": "SHOP-C", "area_m2": 25},
+    {"id": "SHOP-D", "area_m2": 18}
+  ],
+  "shop_pair": [
+    {"id": "SP-A-B", "shop_a": "SHOP-A", "shop_b": "SHOP-B", "opening_distance_m": 6},
+    {"id": "SP-B-C", "shop_a": "SHOP-B", "shop_b": "SHOP-C", "opening_distance_m": 10}
+  ],
+  "vent_pair": [
+    {"id": "VP-OK", "kind": "fresh_vs_exhaust_or_piston", "fresh_id": "VF-1", "other_id": "VE-1", "distance_m": 12},
+    {"id": "VP-NG", "kind": "fresh_vs_exhaust_or_piston", "fresh_id": "VF-2", "other_id": "VE-2", "distance_m": 7}
+  ]
+}

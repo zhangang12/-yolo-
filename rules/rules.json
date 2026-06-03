@@ -1,0 +1,742 @@
+{
+  "version": "0.1",
+  "updated": "2026-06-03",
+  "comment": "MVP 规则集。来源：《消防检查规则》(用户提供，2026-06 版) + GB 51298-2018 / GB 50157-2013 / GB 50016-2014。每条只在适用条件成立时触发；同一指标下'地下/地上/高架'是分支不是冲突。",
+  "rules": [
+    {
+      "rule_id": "AREA-PUB-001",
+      "name": "站厅公共区防火分区面积",
+      "category": "防火分区面积",
+      "target": "fire_compartment",
+      "applies_when": [
+        {
+          "path": "target.zone_type",
+          "op": "eq",
+          "value": "public"
+        },
+        {
+          "path": "target.is_shared_concourse",
+          "op": "ne",
+          "value": true
+        }
+      ],
+      "check": {
+        "type": "compare",
+        "path": "target.area_m2",
+        "op": "le",
+        "threshold": 5000
+      },
+      "mandatory": false,
+      "severity": "warning",
+      "source": "GB 51298-2018 4.3.1",
+      "message": "公共区 {target.id} 面积 {value}㎡，超规范上限 5000㎡（不宜）"
+    },
+    {
+      "rule_id": "AREA-PUB-TRANSFER-2L-001",
+      "name": "两线换乘共用站厅公共区面积",
+      "category": "防火分区面积",
+      "target": "fire_compartment",
+      "applies_when": [
+        {
+          "path": "target.zone_type",
+          "op": "eq",
+          "value": "public"
+        },
+        {
+          "path": "target.is_shared_concourse",
+          "op": "eq",
+          "value": true
+        },
+        {
+          "path": "station.transfer_lines",
+          "op": "eq",
+          "value": 2
+        }
+      ],
+      "check": {
+        "type": "compare",
+        "path": "target.area_m2",
+        "op": "le",
+        "threshold": 10000
+      },
+      "mandatory": true,
+      "severity": "critical",
+      "source": "SZDB/Z100-2014 1.2.3",
+      "message": "两线共用站厅公共区 {target.id} 面积 {value}㎡，超规范上限 10000㎡"
+    },
+    {
+      "rule_id": "AREA-PUB-TRANSFER-3L-001",
+      "name": "三线及以上换乘共用站厅公共区面积",
+      "category": "防火分区面积",
+      "target": "fire_compartment",
+      "applies_when": [
+        {
+          "path": "target.zone_type",
+          "op": "eq",
+          "value": "public"
+        },
+        {
+          "path": "target.is_shared_concourse",
+          "op": "eq",
+          "value": true
+        },
+        {
+          "path": "station.transfer_lines",
+          "op": "ge",
+          "value": 3
+        }
+      ],
+      "check": {
+        "type": "compare",
+        "path": "target.area_m2",
+        "op": "le",
+        "threshold": 15000
+      },
+      "mandatory": true,
+      "severity": "critical",
+      "source": "SZDB/Z100-2014 1.2.3",
+      "message": "三线共用站厅公共区 {target.id} 面积 {value}㎡，超规范上限 15000㎡"
+    },
+    {
+      "rule_id": "AREA-PUB-TRANSFER-3L-SPRINKLER-001",
+      "name": "三线共用站厅 >10000㎡ 应设自动喷水灭火系统",
+      "category": "防火分区面积",
+      "target": "fire_compartment",
+      "applies_when": [
+        {
+          "path": "target.zone_type",
+          "op": "eq",
+          "value": "public"
+        },
+        {
+          "path": "target.is_shared_concourse",
+          "op": "eq",
+          "value": true
+        },
+        {
+          "path": "station.transfer_lines",
+          "op": "ge",
+          "value": 3
+        },
+        {
+          "path": "target.area_m2",
+          "op": "gt",
+          "value": 10000
+        }
+      ],
+      "check": {
+        "type": "compare",
+        "path": "target.has_sprinkler",
+        "op": "eq",
+        "threshold": true
+      },
+      "mandatory": true,
+      "severity": "critical",
+      "source": "SZDB/Z100-2014 1.2.3",
+      "message": "三线共用站厅 {target.id} 面积 {target.area_m2}㎡ >10000㎡，但未设自动喷水灭火系统（has_sprinkler={value}）"
+    },
+    {
+      "rule_id": "AREA-EQUIP-UG-001",
+      "name": "地下车站设备管理区分区面积",
+      "category": "防火分区面积",
+      "target": "fire_compartment",
+      "applies_when": [
+        {
+          "path": "station.type",
+          "op": "eq",
+          "value": "underground"
+        },
+        {
+          "path": "target.zone_type",
+          "op": "eq",
+          "value": "equipment"
+        }
+      ],
+      "check": {
+        "type": "compare",
+        "path": "target.area_m2",
+        "op": "le",
+        "threshold": 1500
+      },
+      "mandatory": true,
+      "severity": "critical",
+      "source": "GB 50157-2013 28.2.2-1 / GB 51298-2018 4.2.2",
+      "message": "地下设备区 {target.id} 面积 {value}㎡，超规范上限 1500㎡"
+    },
+    {
+      "rule_id": "AREA-EQUIP-AG-001",
+      "name": "地上车站设备管理区分区面积",
+      "category": "防火分区面积",
+      "target": "fire_compartment",
+      "applies_when": [
+        {
+          "path": "station.type",
+          "op": "eq",
+          "value": "at_grade"
+        },
+        {
+          "path": "target.zone_type",
+          "op": "eq",
+          "value": "equipment"
+        }
+      ],
+      "check": {
+        "type": "compare",
+        "path": "target.area_m2",
+        "op": "le",
+        "threshold": 2500
+      },
+      "mandatory": true,
+      "severity": "critical",
+      "source": "GB 51298-2018 4.3.2 / GB 50157-2013 28.2.2-3",
+      "message": "地上设备区 {target.id} 面积 {value}㎡，超规范上限 2500㎡"
+    },
+    {
+      "rule_id": "AREA-EQUIP-ELEV-HIGH-001",
+      "name": "高架车站(>24m)设备管理区分区面积",
+      "category": "防火分区面积",
+      "target": "fire_compartment",
+      "applies_when": [
+        {
+          "path": "station.type",
+          "op": "eq",
+          "value": "elevated"
+        },
+        {
+          "path": "station.height_m",
+          "op": "gt",
+          "value": 24
+        },
+        {
+          "path": "target.zone_type",
+          "op": "eq",
+          "value": "equipment"
+        }
+      ],
+      "check": {
+        "type": "compare",
+        "path": "target.area_m2",
+        "op": "le",
+        "threshold": 1500
+      },
+      "mandatory": true,
+      "severity": "critical",
+      "source": "GB 51298-2018 4.3.2",
+      "message": "高架车站(>24m)设备区 {target.id} 面积 {value}㎡，超规范上限 1500㎡"
+    },
+    {
+      "rule_id": "AREA-EQUIP-ELEV-LOW-001",
+      "name": "高架车站(≤24m)设备管理区分区面积",
+      "category": "防火分区面积",
+      "target": "fire_compartment",
+      "applies_when": [
+        {
+          "path": "station.type",
+          "op": "eq",
+          "value": "elevated"
+        },
+        {
+          "path": "station.height_m",
+          "op": "le",
+          "value": 24
+        },
+        {
+          "path": "target.zone_type",
+          "op": "eq",
+          "value": "equipment"
+        }
+      ],
+      "check": {
+        "type": "compare",
+        "path": "target.area_m2",
+        "op": "le",
+        "threshold": 2500
+      },
+      "mandatory": true,
+      "severity": "critical",
+      "source": "GB 51298-2018 4.3.2",
+      "message": "高架车站(≤24m)设备区 {target.id} 面积 {value}㎡，超规范上限 2500㎡"
+    },
+    {
+      "rule_id": "EVAC-DIST-ANY-001",
+      "name": "站台/站厅公共区任一点至安全出口疏散距离",
+      "category": "安全疏散",
+      "target": "evac_distance_line",
+      "applies_when": [
+        {
+          "path": "target.kind",
+          "op": "eq",
+          "value": "any_to_exit"
+        }
+      ],
+      "check": {
+        "type": "compare",
+        "path": "target.length_m",
+        "op": "le",
+        "threshold": 50
+      },
+      "mandatory": true,
+      "severity": "critical",
+      "source": "GB 50157-2013 28.2.7",
+      "message": "疏散距离 {target.id} = {value}m，超规范上限 50m"
+    },
+    {
+      "rule_id": "EVAC-DIST-EQUIP-BETWEEN-001",
+      "name": "设备区房间疏散门位于两安全出口之间到最近出口距离",
+      "category": "安全疏散",
+      "target": "door",
+      "applies_when": [
+        {
+          "path": "target.zone",
+          "op": "eq",
+          "value": "equipment"
+        },
+        {
+          "path": "target.position",
+          "op": "eq",
+          "value": "between_exits"
+        }
+      ],
+      "check": {
+        "type": "compare",
+        "path": "target.distance_to_nearest_exit_m",
+        "op": "le",
+        "threshold": 40
+      },
+      "mandatory": true,
+      "severity": "critical",
+      "source": "GB 50157-2013 28.2.10-3",
+      "message": "设备区房间门 {target.id} 距最近安全出口 {value}m > 40m"
+    },
+    {
+      "rule_id": "EVAC-DIST-EQUIP-DEADEND-001",
+      "name": "设备区袋形走道/尽端房间门到最近出口距离",
+      "category": "安全疏散",
+      "target": "door",
+      "applies_when": [
+        {
+          "path": "target.zone",
+          "op": "eq",
+          "value": "equipment"
+        },
+        {
+          "path": "target.position",
+          "op": "eq",
+          "value": "dead_end"
+        }
+      ],
+      "check": {
+        "type": "compare",
+        "path": "target.distance_to_nearest_exit_m",
+        "op": "le",
+        "threshold": 22
+      },
+      "mandatory": true,
+      "severity": "critical",
+      "source": "GB 50157-2013 28.2.10-3",
+      "message": "设备区袋形/尽端房间门 {target.id} 距最近安全出口 {value}m > 22m"
+    },
+    {
+      "rule_id": "EXIT-NUM-PUB-001",
+      "name": "站厅公共区直通地面安全出口数",
+      "category": "安全出口",
+      "target": "station",
+      "applies_when": [],
+      "check": {
+        "type": "count",
+        "collection_path": "target.public_zone.exits",
+        "filter": [
+          {
+            "path": "item.leads_to",
+            "op": "eq",
+            "value": "ground"
+          }
+        ],
+        "op": "ge",
+        "threshold": 2
+      },
+      "mandatory": true,
+      "severity": "critical",
+      "source": "GB 51298-2018 5.1.4 / GB 50157-2013 28.2.3-1",
+      "message": "站厅公共区直通地面安全出口共 {value} 个 < 规范下限 2 个"
+    },
+    {
+      "rule_id": "EXIT-NUM-EQUIP-001",
+      "name": "地下车站设备与管理用房区安全出口数",
+      "category": "安全出口",
+      "target": "station",
+      "applies_when": [
+        {
+          "path": "station.type",
+          "op": "eq",
+          "value": "underground"
+        }
+      ],
+      "check": {
+        "type": "count",
+        "collection_path": "target.equipment_zone.exits",
+        "op": "ge",
+        "threshold": 2
+      },
+      "mandatory": true,
+      "severity": "critical",
+      "source": "GB 50157-2013 28.2.3-3",
+      "message": "地下设备与管理用房区安全出口共 {value} 个 < 规范下限 2 个"
+    },
+    {
+      "rule_id": "EXIT-DIST-SAME-DIR-001",
+      "name": "同方向设置的两个安全出口通道口净距",
+      "category": "安全出口",
+      "target": "exit_pair",
+      "applies_when": [
+        {
+          "path": "target.relation",
+          "op": "eq",
+          "value": "same_direction"
+        }
+      ],
+      "check": {
+        "type": "compare",
+        "path": "target.distance_m",
+        "op": "ge",
+        "threshold": 10
+      },
+      "mandatory": true,
+      "severity": "critical",
+      "source": "GB 50157-2013 28.2.3-4",
+      "message": "同方向两安全出口 {target.exit_a} 与 {target.exit_b} 净距 {value}m < 10m"
+    },
+    {
+      "rule_id": "EXIT-DIST-ADJ-001",
+      "name": "相邻两个安全出口最小水平距离",
+      "category": "安全出口",
+      "target": "exit_pair",
+      "applies_when": [
+        {
+          "path": "target.relation",
+          "op": "eq",
+          "value": "adjacent"
+        }
+      ],
+      "check": {
+        "type": "compare",
+        "path": "target.distance_m",
+        "op": "ge",
+        "threshold": 20
+      },
+      "mandatory": true,
+      "severity": "critical",
+      "source": "GB 51298-2018 5.1.4",
+      "message": "相邻两安全出口 {target.exit_a} 与 {target.exit_b} 水平距离 {value}m < 20m"
+    },
+    {
+      "rule_id": "WIDTH-DOOR-EVAC-001",
+      "name": "疏散门净宽",
+      "category": "疏散宽度",
+      "target": "door",
+      "applies_when": [
+        {
+          "path": "target.is_evacuation",
+          "op": "eq",
+          "value": true
+        }
+      ],
+      "check": {
+        "type": "compare",
+        "path": "target.clear_width_m",
+        "op": "ge",
+        "threshold": 0.9
+      },
+      "mandatory": true,
+      "severity": "critical",
+      "source": "GB 50016-2014 5.5.18 (净宽=洞口宽-150mm)",
+      "message": "疏散门 {target.id} 净宽 {value}m < 0.9m"
+    },
+    {
+      "rule_id": "WIDTH-CORR-EVAC-001",
+      "name": "疏散走道净宽",
+      "category": "疏散宽度",
+      "target": "corridor",
+      "applies_when": [
+        {
+          "path": "target.kind",
+          "op": "eq",
+          "value": "evac_corridor"
+        }
+      ],
+      "check": {
+        "type": "compare",
+        "path": "target.clear_width_m",
+        "op": "ge",
+        "threshold": 1.1
+      },
+      "mandatory": true,
+      "severity": "critical",
+      "source": "GB 50016-2014 5.5.18",
+      "message": "疏散走道 {target.id} 净宽 {value}m < 1.10m"
+    },
+    {
+      "rule_id": "WIDTH-STAIR-EVAC-001",
+      "name": "疏散楼梯净宽",
+      "category": "疏散宽度",
+      "target": "corridor",
+      "applies_when": [
+        {
+          "path": "target.kind",
+          "op": "eq",
+          "value": "evac_stair"
+        }
+      ],
+      "check": {
+        "type": "compare",
+        "path": "target.clear_width_m",
+        "op": "ge",
+        "threshold": 1.1
+      },
+      "mandatory": true,
+      "severity": "critical",
+      "source": "GB 50016-2014 5.5.18 (净宽=梯段宽-100mm)",
+      "message": "疏散楼梯 {target.id} 净宽 {value}m < 1.10m"
+    },
+    {
+      "rule_id": "WIDTH-EQUIP-CORR-SINGLE-001",
+      "name": "设备区单面布置疏散通道宽度",
+      "category": "疏散宽度",
+      "target": "corridor",
+      "applies_when": [
+        {
+          "path": "target.kind",
+          "op": "eq",
+          "value": "equip_corridor_single"
+        }
+      ],
+      "check": {
+        "type": "compare",
+        "path": "target.clear_width_m",
+        "op": "ge",
+        "threshold": 1.2
+      },
+      "mandatory": true,
+      "severity": "critical",
+      "source": "GB 50157-2013 28.2.10-2",
+      "message": "设备区单面布置疏散通道 {target.id} 宽度 {value}m < 1.2m"
+    },
+    {
+      "rule_id": "WIDTH-EQUIP-CORR-DOUBLE-001",
+      "name": "设备区双面布置疏散通道宽度",
+      "category": "疏散宽度",
+      "target": "corridor",
+      "applies_when": [
+        {
+          "path": "target.kind",
+          "op": "eq",
+          "value": "equip_corridor_double"
+        }
+      ],
+      "check": {
+        "type": "compare",
+        "path": "target.clear_width_m",
+        "op": "ge",
+        "threshold": 1.5
+      },
+      "mandatory": true,
+      "severity": "critical",
+      "source": "GB 50157-2013 28.2.10-2",
+      "message": "设备区双面布置疏散通道 {target.id} 宽度 {value}m < 1.5m"
+    },
+    {
+      "rule_id": "CORR-UG-ENTRANCE-LEN-001",
+      "name": "地下出入口通道长度",
+      "category": "疏散宽度",
+      "target": "corridor",
+      "applies_when": [
+        {
+          "path": "station.type",
+          "op": "eq",
+          "value": "underground"
+        },
+        {
+          "path": "target.kind",
+          "op": "eq",
+          "value": "entrance_passage"
+        }
+      ],
+      "check": {
+        "type": "compare",
+        "path": "target.length_m",
+        "op": "le",
+        "threshold": 100
+      },
+      "mandatory": false,
+      "severity": "warning",
+      "source": "GB 50157-2013 28.2.10-4",
+      "message": "地下出入口通道 {target.id} 长度 {value}m > 100m（不宜，超出需采取额外消防疏散措施）"
+    },
+    {
+      "rule_id": "DOOR-SWING-EVAC-001",
+      "name": "疏散方向门开启方向",
+      "category": "防火门窗卷帘",
+      "target": "door",
+      "applies_when": [
+        {
+          "path": "target.is_evacuation",
+          "op": "eq",
+          "value": true
+        }
+      ],
+      "check": {
+        "type": "compare",
+        "path": "target.swing_direction",
+        "op": "eq",
+        "threshold": "evacuation"
+      },
+      "mandatory": true,
+      "severity": "critical",
+      "source": "GB 50016-2014 6.4.2-3",
+      "message": "疏散门 {target.id} 开启方向 = {value}，应为 evacuation（向疏散方向开启）"
+    },
+    {
+      "rule_id": "SHOP-COUNT-PUB-001",
+      "name": "公共区商铺数量",
+      "category": "商铺",
+      "target": "station",
+      "applies_when": [],
+      "check": {
+        "type": "count",
+        "collection_path": "target.public_zone.commercial_shops",
+        "op": "le",
+        "threshold": 3
+      },
+      "mandatory": true,
+      "severity": "critical",
+      "source": "审查要点·公共区商铺三限一距",
+      "message": "公共区商铺共 {value} 个 > 上限 3 个"
+    },
+    {
+      "rule_id": "SHOP-AREA-EACH-001",
+      "name": "单个商铺面积",
+      "category": "商铺",
+      "target": "shop",
+      "applies_when": [],
+      "check": {
+        "type": "compare",
+        "path": "target.area_m2",
+        "op": "le",
+        "threshold": 30
+      },
+      "mandatory": true,
+      "severity": "critical",
+      "source": "审查要点·公共区商铺三限一距",
+      "message": "商铺 {target.id} 面积 {value}㎡ > 30㎡"
+    },
+    {
+      "rule_id": "SHOP-OPENING-DIST-001",
+      "name": "商铺开口间距",
+      "category": "商铺",
+      "target": "shop_pair",
+      "applies_when": [],
+      "check": {
+        "type": "compare",
+        "path": "target.opening_distance_m",
+        "op": "ge",
+        "threshold": 8
+      },
+      "mandatory": true,
+      "severity": "critical",
+      "source": "审查要点·公共区商铺三限一距",
+      "message": "商铺 {target.shop_a} 与 {target.shop_b} 开口间距 {value}m < 8m"
+    },
+    {
+      "rule_id": "VENT-FRESH-DIST-001",
+      "name": "新风与排风/活塞风口距离",
+      "category": "防排烟",
+      "target": "vent_pair",
+      "applies_when": [
+        {
+          "path": "target.kind",
+          "op": "eq",
+          "value": "fresh_vs_exhaust_or_piston"
+        }
+      ],
+      "check": {
+        "type": "compare",
+        "path": "target.distance_m",
+        "op": "ge",
+        "threshold": 10
+      },
+      "mandatory": true,
+      "severity": "critical",
+      "source": "审查要点·风亭布置",
+      "message": "新风口 {target.fresh_id} 与排风/活塞风口 {target.other_id} 距离 {value}m < 10m"
+    },
+    {
+      "rule_id": "FIRE-CLEARANCE-MULTI-001",
+      "name": "地铁附属建筑与周边多层民用建筑(一二级)防火间距",
+      "category": "防火间距",
+      "target": "building_clearance",
+      "applies_when": [
+        {
+          "path": "target.building_category",
+          "op": "eq",
+          "value": "多层民用"
+        }
+      ],
+      "check": {
+        "type": "compare",
+        "path": "target.distance_m",
+        "op": "ge",
+        "threshold": 6
+      },
+      "mandatory": true,
+      "severity": "critical",
+      "source": "GB 50016-2014 表5.2.2 / GB 51298-2018 3.1.2",
+      "message": "出入口/风亭 与 周边建筑[{target.building_name}](多层一二级) 间距 {value}m（规范要求≥{threshold}m）"
+    },
+    {
+      "rule_id": "FIRE-CLEARANCE-HIGHRISE-001",
+      "name": "地铁附属建筑与周边高层民用建筑防火间距",
+      "category": "防火间距",
+      "target": "building_clearance",
+      "applies_when": [
+        {
+          "path": "target.building_category",
+          "op": "eq",
+          "value": "高层民用"
+        }
+      ],
+      "check": {
+        "type": "compare",
+        "path": "target.distance_m",
+        "op": "ge",
+        "threshold": 9
+      },
+      "mandatory": true,
+      "severity": "critical",
+      "source": "GB 50016-2014 表5.2.2 / GB 51298-2018 3.1.2",
+      "message": "出入口/风亭 与 周边建筑[{target.building_name}](高层民用) 间距 {value}m（规范要求≥{threshold}m）"
+    },
+    {
+      "rule_id": "FIRE-CLEARANCE-GASSTATION-001",
+      "name": "出入口与加油加气加氢站安全间距",
+      "category": "防火间距",
+      "target": "building_clearance",
+      "applies_when": [
+        {
+          "path": "target.building_category",
+          "op": "eq",
+          "value": "加油加气加氢站"
+        }
+      ],
+      "check": {
+        "type": "compare",
+        "path": "target.distance_m",
+        "op": "ge",
+        "threshold": 50
+      },
+      "mandatory": true,
+      "severity": "critical",
+      "source": "GB 50156-2021 4.0.4 注3",
+      "message": "出入口 与 [{target.building_name}](加油加气加氢站) 安全间距 {value}m（规范要求≥{threshold}m）"
+    }
+  ]
+}

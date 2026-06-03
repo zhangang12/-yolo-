@@ -4,6 +4,7 @@ opencv-python>=4.8   # 图像处理、区域轮廓、画标注
 numpy>=1.24
 pytesseract>=0.3.10  # OCR 封装(需另装系统级 tesseract)
 Pillow>=10.0
+shapely>=2.0         # 防火间距 polygon 距离计算 (fangju_demo)
 PySide6>=6.6         # 桌面客户端 GUI (app/main.py)
 # 训练阶段:
 ultralytics>=8.2     # YOLO-seg 训练/评估 (训练页用；CPU 也能跑只是慢)
