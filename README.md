@@ -105,6 +105,15 @@ python tools/vector_extract.py  站厅层.pdf  --rules rules/rules.json
 **比 OCR 准、不依赖标注/模型**，主攻防火分区面积。⚠️ 是设计院**声称值**，会标注来源并做自洽检查；
 真伪的几何复核留待后续（几何精提取作校验器）。已兼容欧洲城/嘉宾/东莞等多种制图格式。
 
+### 导出 Word 审查报告 `report_docx.py`
+
+```bash
+# 把 e2e 的产出汇编成可交付的 Word 报告（封面/结论/逐条检查表/标注图/免责）
+python tools/report_docx.py  e2e输出目录
+```
+
+客户端「端到端预审」页跑完后，点 **导出 Word 报告** 按钮即可一键生成 `审查报告.docx`。依赖 `python-docx`。
+
 ### 端到端流程 `e2e_demo.py`
 
 ```bash

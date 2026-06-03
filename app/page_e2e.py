@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
 from ui_common import (card, h1, hint, section, PathRow, ImageViewer, LogConsole, ProcRunner)
 
 TOOL = "tools/e2e_demo.py"
+REPORT = "tools/report_docx.py"
 
 STAGES = ["① 识别 (文字层直读 / OCR)", "② 结构化 (面积/类型/距离)",
           "③ 规范比对 (规则引擎)", "④ 原图标注 (回写)"]
@@ -54,8 +55,20 @@ class E2EPage(QWidget):
         self.stop_btn.clicked.connect(self.runner.stop)
         btns.addWidget(self.run_btn, 1); btns.addWidget(self.stop_btn)
         lv.addLayout(btns)
+        self.report_btn = QPushButton("导出 Word 报告")
+        self.report_btn.setEnabled(False)
+        self.report_btn.clicked.connect(self._export_report)
+        lv.addWidget(self.report_btn)
         left.setFixedWidth(400)
         root.addWidget(left)
+
+        # 报告生成用独立子进程（避免与预审任务冲突）
+        self.report_runner = ProcRunner(cwd)
+        self.report_runner.output.connect(lambda s: self.log.append_text(s))
+        self.report_runner.finished.connect(
+            lambda c: self.log.append_text(
+                f"[报告] 已导出到预审输出目录的“审查报告.docx”。\n" if c == 0
+                else f"[报告] 生成失败（退出码 {c}）。\n"))
 
         right = QSplitter(Qt.Vertical)
         self.viewer = ImageViewer(); self.log = LogConsole()
@@ -69,6 +82,7 @@ class E2EPage(QWidget):
             self.log.append_text("⚠️ 请先选择矢量 PDF。\n"); return
         out = self.out.text() or os.path.join(os.path.dirname(os.path.abspath(pdf)), "e2e_out")
         self._out_dir = out
+        self.report_btn.setEnabled(False)
         for l, s in zip(self.stage_labels, STAGES):
             l.setText("○  " + s)
         self.log.banner("端到端预审开始")
@@ -104,6 +118,13 @@ class E2EPage(QWidget):
                     self.log.append_text("\n[结构化结果 e2e_structured.json]\n" + f.read() + "\n")
             except Exception:
                 pass
+            self.report_btn.setEnabled(True)   # 有结果了，允许导出报告
+
+    def _export_report(self):
+        if not self._out_dir:
+            self.log.append_text("⚠️ 请先跑一次端到端预审。\n"); return
+        self.log.banner("导出 Word 审查报告")
+        self.report_runner.run(REPORT, [self._out_dir])
 
     def _set_running(self, running):
         self.run_btn.setEnabled(not running)
