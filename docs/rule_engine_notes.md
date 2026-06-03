@@ -2,68 +2,156 @@
 
 ## 一、现状
 
-提供的《消防检查规则》是一份**规范条文汇编**（四列：审查内容/适用规范/条款/审查解析），覆盖防火间距、防火分区、安全疏散、防火门窗卷帘、防排烟等。内容全、解析到位，但**不是"可执行规则"，不能直接喂引擎**。
+提供的《消防检查规则》是一份**规范条文汇编**（四列：审查内容/适用规范/条款/审查解析），覆盖防火间距、防火分区、安全疏散、防火门窗卷帘、防排烟等。内容全、解析到位，但**不是"可执行规则"**，需要先按"适用条件 → 判据"拆条目，再喂引擎。
 
-## 二、必须修的问题
+> 2026-06 更新：规则引擎已在仓库落地，详见 [`rules/schema.md`](../rules/schema.md)、[`rules/rules.json`](../rules/rules.json)、[`tools/rule_engine.py`](../tools/rule_engine.py)。已支持 26 条 MVP 规则，覆盖防火分区面积、安全疏散、疏散宽度、安全出口、商铺、防火门开启、风口距离。
 
-### 1. 多规范阈值冲突，无判定逻辑（最关键）
-同一检查项堆了多部规范、阈值不一致，却没写"什么情况用哪条"：
+## 二、初版评审发现的问题（已按现行口径修正）
 
-| 检查项 | 冲突阈值 | 取决于 |
-|---|---|---|
-| 设备区分区面积 | 地下1500 / 地上2500 / 高架>24m 1500 ㎡ | 地下·地上·高架 |
-| 换乘共用站厅面积 | 5000 / 两线10000 / 三线15000 ㎡ | 线数 |
-| 安全出口间距 | 同方向≥10m / 相邻两个≥20m | 指标定义 |
+### 1. 同指标多阈值 = 适用条件分支，**不是冲突**
 
-→ 必须按"适用条件"拆开，每条给确定触发场景。
+之前列为"冲突"的几项，其实是规范按车站类型/线数分档：
 
-### 2. 强条/非强条未区分
-"不应/不得/严禁"=强制；"不宜/宜"=建议。如站厅5000㎡是"不**宜**"、设备区1500㎡是"不**应**"，严重等级不同，需打标。
+| 检查项 | 分支 | 阈值 | 出处 |
+|---|---|---|---|
+| 设备区分区面积 | 地下 underground | ≤1500㎡ | GB 50157-2013 28.2.2-1 / GB 51298-2018 4.2.2 |
+| | 地上 at_grade | ≤2500㎡ | GB 51298-2018 4.3.2 / GB 50157-2013 28.2.2-3 |
+| | 高架 elevated >24m | ≤1500㎡ | GB 51298-2018 4.3.2 |
+| | 高架 elevated ≤24m | ≤2500㎡ | GB 51298-2018 4.3.2（同地上口径） |
+| 换乘共用站厅公共区面积 | 单线 | ≤5000㎡（不宜） | GB 51298-2018 4.3.1 |
+| | 两线共用 | ≤10000㎡ | SZDB/Z100-2014 1.2.3 |
+| | 三线共用 | ≤15000㎡，>10000㎡时设自喷 | SZDB/Z100-2014 1.2.3 |
+| 安全出口净距 | **同方向** same_direction | ≥10m | GB 50157-2013 28.2.3-4 |
+| | **相邻** adjacent（两个相邻安全出口） | ≥20m | GB 51298-2018 5.1.4 |
+
+> **术语澄清（用户口径）**：
+> - **地下 underground**：地表以下的车站。
+> - **地上 at_grade**：贴地面、建在地面上的车站。
+> - **高架 elevated**：通过支柱在空中架起来、轨道在空中的车站。
+> - **同方向 vs 相邻**：两个安全出口在站厅平面上的相对位置——朝同一方向开 = `same_direction`（净距≥10m）；朝不同方向开但相邻 = `adjacent`（水平距离≥20m）。
+
+→ 在 `rules.json` 里通过每条规则的 `applies_when` 把上述条件落到判据触发条件上，**每条规则只在自己的场景里启动**。
+
+### 2. 强条/非强条已区分
+
+`mandatory: true` = "不应/不得/严禁"（critical）；`mandatory: false` = "不宜/宜"（warning）。
+
+例：站厅公共区单线面积 5000㎡ 是"不**宜**" → `AREA-PUB-001` 的 `mandatory=false`、`severity=warning`；地下设备区 1500㎡ 是"不**应**" → `AREA-EQUIP-UG-001` 的 `mandatory=true`、`severity=critical`。
 
 ### 3. 录入错误
-- 规范编号：《地铁设计防火标准》正确是 **GB 51298-2018**，文中 2 处误写 **GB52198**。
-- 错别字："大**雨**/大**干**"（=大于）、"不计**人**"（=不计入）、"防**头**卷帘"、"**肪**火间距"。
+
+- 规范编号：《地铁设计防火标准》正确是 **GB 51298-2018**（用户提供的新版文档已统一使用此编号）。
+- 错别字"大雨/大干"=大于、"不计人"=不计入、"防头卷帘"、"肪火间距" → 引擎不依赖原文，规则表里都已规范化。
 
 ### 4. 可执行性
-- 缺"判定逻辑"列（取哪个字段/怎么算/阈值/条件/严重度）。
-- 引用了不含数值的表（防火间距表5.2.2，需另导入 6–14m 数值）。
-- 部分条文**超出几何识别能力**，要标"人工/超范围"：4min/6min疏散能力(需客流量)、防火墙3h/楼板1.5h/甲级门/A级装修(构造材料类)。
 
-### 5. 藏着的关键计算口径（要用起来）
-- **门净宽 ≈ 洞口宽 − 150mm**；楼梯净宽按梯段算。
-- 商铺"三限一距"：≤3个 / 总≤100㎡ / 单店≤30㎡ / 开口间距≥8m。
+- 引擎采用统一 schema：`rule_id / target / applies_when / check / mandatory / severity / source / message`，每条都可独立评估。
+- 未含数值的引用表（如防火间距表 5.2.2、表 3.1.2 采光窗井与相邻地面建筑）→ MVP 暂未实现（防火间距判断依赖周边建筑数据，当前标注还没覆盖）。
+- **超出几何识别范围的条文**（4min/6min 疏散能力需要客流量；防火墙 3h、楼板 1.5h、甲级门、A 级装修等构造材料类）→ 标注 `super_scope`，由人工复核或在结构化数据中显式提供属性。
 
-## 三、目标：重构成"可执行规则表"
+### 5. 已纳入规则的关键计算口径
 
-每条规则至少七列：
+- **门净宽 = 洞口宽 − 150mm**（`WIDTH-DOOR-EVAC-001` 在 source 注明）。
+- **楼梯净宽 = 梯段宽 − 100mm**（`WIDTH-STAIR-EVAC-001` 同上）。
+- **商铺三限一距**：≤3 个 / 总 ≤100㎡ / 单个 ≤30㎡ / 开口间距 ≥8m（`SHOP-COUNT-PUB-001` / `SHOP-AREA-EACH-001` / `SHOP-OPENING-DIST-001`；总面积 ≤100㎡ 的聚合规则待补）。
+
+## 三、规则表 Schema（已实现）
+
+详见 [`rules/schema.md`](../rules/schema.md)。要点：
+
+每条规则字段：
 
 ```json
 {
-  "rule_id": "FIRE-AREA-001",
-  "检查项": "防火分区面积",
-  "适用条件": {"图纸": "站厅层", "分区类型": "公共区", "车站": "地下"},
-  "输入字段": "fire_compartment.area_m2",
-  "判据": "area <= 5000",
-  "阈值": 5000,
-  "强条": false,
-  "严重等级": "一般",
-  "规范出处": "GB 51298-2018 4.2.1",
-  "问题描述模板": "{编号}面积{值}㎡, 超规范上限5000㎡"
+  "rule_id": "AREA-EQUIP-UG-001",
+  "name": "地下车站设备管理区分区面积",
+  "category": "防火分区面积",
+  "target": "fire_compartment",
+  "applies_when": [
+    {"path": "station.type", "op": "eq", "value": "underground"},
+    {"path": "target.zone_type", "op": "eq", "value": "equipment"}
+  ],
+  "check": {"type": "compare", "path": "target.area_m2", "op": "le", "threshold": 1500},
+  "mandatory": true,
+  "severity": "critical",
+  "source": "GB 50157-2013 28.2.2-1 / GB 51298-2018 4.2.2",
+  "message": "地下设备区 {target.id} 面积 {value}㎡，超规范上限 1500㎡"
 }
 ```
 
-## 四、MVP 先做的规则（5 条）
+引擎对每条规则产出：
 
-| rule_id | 检查项 | 判据 | 出处 | 强条 |
-|---|---|---|---|---|
-| AREA-PUB | 公共区分区面积 | ≤5000㎡ | GB51298 4.2.1 | 否(不宜) |
-| AREA-EQUIP | 设备区分区面积 | ≤1500㎡(地下) | GB51298 4.2.2 | 是 |
-| EVAC-DIST | 任一点至安全出口 | ≤50m | GB50157 28.2.7 | 是 |
-| WIDTH-DOOR | 疏散门净宽(=洞口−150) | ≥0.9m | GB50016 | 是 |
-| EXIT-NUM | 公共区安全出口个数/间距 | ≥2个 且 ≥20m | GB51298 5.1.4 | 是 |
+```json
+{
+  "rule_id": "...",
+  "target_id": "FC-EQ-03",
+  "passed": false,                // true / false / null(数据不足→待人工复核)
+  "review_required": false,
+  "value": 1820,
+  "threshold": 1500,
+  "severity": "critical",
+  "mandatory": true,
+  "source": "...",
+  "message": "..."
+}
+```
 
-## 五、关键原则
+## 四、MVP 已实现的 26 条规则
 
-- **比对用规则引擎，不用 AI**：确定性、可解释、可追溯。
-- **识别存疑/数据缺失 → 标"待人工复核"，不默认合规**（审图宁可多报不可漏报）。
-- 每条规则挂规范出处，报告才有依据。规则表后续逐条扩充，不动代码。
+| 类别 | 条目数 | 主要规则 ID |
+|---|---|---|
+| 防火分区面积 | 8 | `AREA-PUB-001`, `AREA-PUB-TRANSFER-2L/3L-001`, `AREA-PUB-TRANSFER-3L-SPRINKLER-001`, `AREA-EQUIP-UG/AG/ELEV-HIGH/ELEV-LOW-001` |
+| 安全疏散 | 3 | `EVAC-DIST-ANY-001`(≤50m), `EVAC-DIST-EQUIP-BETWEEN-001`(≤40m), `EVAC-DIST-EQUIP-DEADEND-001`(≤22m) |
+| 安全出口 | 4 | `EXIT-NUM-PUB-001`(≥2), `EXIT-NUM-EQUIP-001`(≥2), `EXIT-DIST-SAME-DIR-001`(≥10m), `EXIT-DIST-ADJ-001`(≥20m) |
+| 疏散宽度 | 5 | `WIDTH-DOOR-EVAC-001`(≥0.9m), `WIDTH-CORR-EVAC-001`(≥1.10m), `WIDTH-STAIR-EVAC-001`(≥1.10m), `WIDTH-EQUIP-CORR-SINGLE-001`(≥1.2m), `WIDTH-EQUIP-CORR-DOUBLE-001`(≥1.5m) |
+| 通道长度 | 1 | `CORR-UG-ENTRANCE-LEN-001`(≤100m, 不宜) |
+| 防火门窗卷帘 | 1 | `DOOR-SWING-EVAC-001`（开启方向=evacuation） |
+| 商铺 | 3 | `SHOP-COUNT-PUB-001`(≤3), `SHOP-AREA-EACH-001`(≤30㎡), `SHOP-OPENING-DIST-001`(≥8m) |
+| 防排烟 | 1 | `VENT-FRESH-DIST-001`（新风与排风/活塞风口 ≥10m） |
+
+## 五、还没做的（路线图）
+
+| 项 | 状态 | 说明 |
+|---|---|---|
+| 防火间距规则（表 5.2.2 / 表 3.1.2） | 未做 | 数据依赖周边建筑标注（`surrounding_building`），当前标注还没覆盖；规则结构已设计好，等数据 |
+| 商铺总面积 ≤100㎡（聚合） | 未做 | 引擎需扩 `sum_aggregate` 算子；逻辑简单，待补 |
+| 4min/6min 疏散能力（需客流量） | super_scope | 几何识别范围之外，标注 `review_required` |
+| 构造材料类（防火墙 3h、甲级门、A 级装修等） | super_scope | 同上，靠人工或专门字段 |
+| 防火卷帘宽度（≤30m 部位 ≤10m；>30m 部位 ≤宽度/3 且 ≤20m） | 未做 | 等卷帘标签数据 |
+
+## 六、关键原则（不变）
+
+- **比对用规则引擎，不用 AI**：确定性、可解释、可追溯。每个 finding 都带 `rule_id` 和 `source`，便于追到规范条款。
+- **识别存疑/数据缺失 → 标"待人工复核"**（`review_required=true`），引擎不默认合规也不默认违规。
+- 每条规则挂规范出处，报告才有依据。规则表后续逐条扩充，**不动代码**——只编辑 `rules/rules.json`。
+- 新增 target 类型（如 `surrounding_building`）时，需在结构化数据里产出该类型数组，引擎自动按 `target` 字段路由。
+
+## 七、用法速查
+
+```bash
+# 校验规则表
+python tools/rule_engine.py rules/rules.json --dry-run
+
+# 用样例数据跑一遍
+python tools/rule_engine.py rules/rules.json --data examples/sample_structured.json --out findings.json
+
+# 在端到端流程里调用（已接入 e2e_demo）
+python tools/e2e_demo.py 图纸.pdf out/ --rules rules/rules.json --station my_station.json
+```
+
+`--station my_station.json` 形如：
+
+```json
+{
+  "type": "underground",
+  "height_m": 0,
+  "transfer_lines": 2,
+  "public_zone": {
+    "exits": [{"id":"E1","leads_to":"ground"}, {"id":"E2","leads_to":"ground"}],
+    "commercial_shops": [{"id":"SHOP-A"}, {"id":"SHOP-B"}]
+  },
+  "equipment_zone": {"exits": [{"id":"E3"}, {"id":"E4"}]}
+}
+```
+
+不传 `--station` 时按"单线地下站"处理，`EXIT-NUM*` / `SHOP-COUNT*` 会返回 `review_required` 而不是误报失败。

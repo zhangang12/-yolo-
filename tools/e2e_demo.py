@@ -11,10 +11,13 @@ import sys, os, re, json, argparse, io
 from collections import defaultdict
 import xml.etree.ElementTree as ET
 
-# ---- 规范阈值（演示用，真实项目应接规则引擎）----
-RULE_COMPARTMENT_PUBLIC = 5000.0   # 站厅公共区 ≤5000㎡  (GB51298 4.2.1)
-RULE_COMPARTMENT_EQUIP  = 1500.0   # 设备管理区每分区 ≤1500㎡ (GB51298 4.2.2)
-RULE_EVAC_DISTANCE      = 50.0     # 任一点至安全出口 ≤50m   (GB50157 28.2.7)
+# 规则引擎在同目录，直接 import
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import rule_engine
+
+# 默认规则文件位置（仓库根/rules/rules.json）
+_RULES_DEFAULT = os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "rules", "rules.json"))
 
 
 def render(page, dpi):
@@ -147,21 +150,35 @@ def stage2_structure(regions, ocr_items):
     return data
 
 
-# ============ ③ 规范比对 ============
-def stage3_compare(data):
-    findings=[]
-    # 防火分区面积（演示：按公共区上限判，真实需先判分区类型）
-    for v in data["compartment_area_labels_m2"]:
-        ok = v <= RULE_COMPARTMENT_PUBLIC
-        findings.append(dict(type="防火分区面积", value=f"{v}㎡",
-            rule=f"≤{RULE_COMPARTMENT_PUBLIC:.0f}㎡(公共区,GB51298 4.2.1)",
-            passed=bool(ok), note="若属设备区则上限1500㎡"))
-    # 疏散距离 ≤50m
-    for v in data["evac_distance_values_m"]:
-        ok = v <= RULE_EVAC_DISTANCE
-        findings.append(dict(type="疏散距离", value=f"{v}m",
-            rule=f"≤{RULE_EVAC_DISTANCE:.0f}m(任一点至安全出口,GB50157 28.2.7)",
-            passed=bool(ok), note="指标类型(最近出口/两出口间)需人工确认"))
+# ============ ③ 规范比对（接规则引擎） ============
+def stage3_compare(data, rules_path=None, station_meta=None):
+    """调用 rules/rules.json 规则引擎。
+
+    输入是旧版扁平结构（仅有 OCR 面积/距离值），通过 rule_engine.from_e2e_flat 适配为
+    新引擎结构。注意：分区类型是猜的（公共区），真实使用前应替换为标注真值。
+    """
+    structured = rule_engine.from_e2e_flat(data, station=station_meta)
+    rules_path = rules_path or _RULES_DEFAULT
+    raw = rule_engine.evaluate(rules_path, structured)
+    # 转回旧版 finding 形状，保持 stage4 标注兼容；review_required 也保留（passed=None）
+    findings = []
+    for f in raw:
+        if f["target_type"] == "fire_compartment":
+            display_val = f"{f['value']}㎡"
+        elif f["target_type"] == "evac_distance_line":
+            display_val = f"{f['value']}m"
+        else:
+            display_val = str(f["value"])
+        findings.append(dict(
+            type=f["category"], value=display_val,
+            rule=f"{f['threshold']} ({f['source']})",
+            passed=f["passed"],  # True/False/None
+            review_required=f["review_required"],
+            rule_id=f["rule_id"],
+            mandatory=f["mandatory"],
+            severity=f["severity"],
+            note=f["message"],
+        ))
     return findings
 
 
@@ -180,10 +197,18 @@ def stage4_annotate(base_img, data, findings, out_png):
     for it in data["_areas_raw"]+data["_dists_raw"]:
         x0,y0,x1,y1=[int(v) for v in it["box"]]
         passed=val2pass.get(round(it["value"],2), val2pass.get(round(it["value"],1)))
-        color=(0,160,0) if passed else (0,0,230)
+        # True=绿 / False=红 / None(待复核)=黄
+        if passed is True:
+            color=(0,160,0)
+        elif passed is False:
+            color=(0,0,230)
+        else:
+            color=(0,180,220)
         cv2.rectangle(im,(x0-2,y0-2),(x1+2,y1+2),color,3)
         if passed is False:
             cv2.putText(im,"X >limit",(x0,max(0,y0-6)),cv2.FONT_HERSHEY_SIMPLEX,0.9,(0,0,230),2)
+        elif passed is None:
+            cv2.putText(im,"?review",(x0,max(0,y0-6)),cv2.FONT_HERSHEY_SIMPLEX,0.8,(0,180,220),2)
     cv2.imwrite(out_png, im)
     return out_png
 
@@ -192,7 +217,15 @@ def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("pdf"); ap.add_argument("out", nargs="?", default=".")
     ap.add_argument("--page", type=int, default=0); ap.add_argument("--dpi", type=int, default=200)
+    ap.add_argument("--rules", default=_RULES_DEFAULT,
+                    help="规则文件路径（默认 rules/rules.json）")
+    ap.add_argument("--station",
+                    help="站点元数据 JSON 路径；缺省按单线地下站处理")
     a=ap.parse_args()
+    station_meta = None
+    if a.station:
+        with open(a.station, "r", encoding="utf-8") as f:
+            station_meta = json.load(f)
     import fitz
     os.makedirs(a.out, exist_ok=True)
     doc=fitz.open(a.pdf); page=doc[a.page]
@@ -210,11 +243,20 @@ def main():
     print(f"        疏散距离值(m): {data['evac_distance_values_m']}")
 
     print("[③规范比对] 撞规则 ...")
-    findings = stage3_compare(data)
-    nfail=sum(1 for f in findings if not f["passed"])
+    findings = stage3_compare(data, rules_path=a.rules, station_meta=station_meta)
+    nfail=sum(1 for f in findings if f["passed"] is False)
+    nrev=sum(1 for f in findings if f.get("review_required"))
     for f in findings:
-        print(f"        {'❌' if not f['passed'] else '✅'} {f['type']} {f['value']}  规则{f['rule']}")
-    print(f"        共 {len(findings)} 项检查, {nfail} 项不合规")
+        mark = '[强]' if f.get('mandatory') else '[宜]'
+        if f["passed"] is False:
+            icon = '❌'
+        elif f.get("review_required"):
+            icon = '⚠️ '
+        else:
+            icon = '✅'
+        print(f"        {icon} {mark} {f.get('rule_id','?')}  {f['type']} {f['value']}")
+        print(f"            {f['note']}")
+    print(f"        共 {len(findings)} 项检查, {nfail} 项不合规, {nrev} 项待人工复核")
 
     print("[④原图标注] 标回原图 ...")
     out_png=os.path.join(a.out,"e2e_annotated.png")

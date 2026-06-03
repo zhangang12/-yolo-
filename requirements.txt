@@ -6,3 +6,4 @@ pytesseract>=0.3.10  # OCR 封装(需另装系统级 tesseract)
 Pillow>=10.0
 # 训练阶段(后续):
 # ultralytics>=8.2   # YOLO 检测/分割
+shapely>=2.0      # 防火间距 polygon 距离计算 (fangju_demo)

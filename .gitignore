@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 保密图纸/业务数据（不入库，新成员单独索取）
+*.pdf
+*.dwg
+*.dxf
+*.zip
+*.jpg
+*.jpeg
+*.png
+# 例外：示例 JSON 与文档可入
+!examples/*.json
+
+# 标注原始件
+annotations.xml
+*.cvat
+
+# 运行产物
+e2e_out/
+e2e_cache/
+out/
+*.log
+
+# 编辑器/系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

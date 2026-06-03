@@ -13,13 +13,16 @@ fire-review-mvp/
 ├── requirements.txt
 ├── tools/
 │   ├── fire_anno_tool.py   标注三件套：转换 / 质检 / 预标注
-│   ├── e2e_demo.py         端到端流程 demo
+│   ├── e2e_demo.py         端到端流程 demo（接 rule_engine）
+│   ├── fangju_demo.py      防火间距比对 demo（出入口/风亭→周边建筑）
 │   └── e2e_steps.py        分步执行版（受限环境用）
 └── docs/
     ├── label_schema.md             标注标签 schema（类别/属性/枚举）
     ├── annotation_issues_整改单.md  标注数据问题清单（发给标注单位）
     ├── rule_engine_notes.md        《消防检查规则》评审与规则引擎设计
-    └── yolo_training_guide.md      YOLO 训练流程
+    ├── yolo_training_guide.md      YOLO 训练流程
+    ├── 任务分工_标注vs矢量直抽.md    哪些标注团队标、哪些程序直抽
+    └── 标注规范说明_详细版.md        给标注团队的详细标注规范(另有docx)
 ```
 
 ## 安装
@@ -64,15 +67,18 @@ python tools/e2e_demo.py  图纸.pdf  输出目录  --page 0 --dpi 200
 
 > ⚠️ 当前"识别"无训练模型、靠 OCR，**结果含噪声，仅演示流程，不代表审查准确**。精度靠后续 YOLO 训练 + 几何精提取补强（见 HANDOFF 第 3、9 节）。
 
-## 规范阈值（已实现的 demo 规则）
+## 已实现的规范检查（rule_engine 驱动）
 
 | 检查项 | 阈值 | 依据 |
 |---|---|---|
 | 站厅公共区防火分区面积 | ≤ 5000㎡ | GB 51298-2018 4.2.1 |
 | 设备管理区每防火分区面积 | ≤ 1500㎡ | GB 51298-2018 4.2.2 |
 | 任一点至安全出口疏散距离 | ≤ 50m | GB 50157-2013 28.2.7 |
+| 出入口/风亭→周边多层民用建筑(一二级)防火间距 | ≥ 6m | GB 50016-2014 表5.2.2 |
+| 出入口/风亭→周边高层民用建筑防火间距 | ≥ 9m | GB 50016-2014 表5.2.2 |
+| 出入口→加油加气加氢站安全间距 | ≥ 50m | GB 50156-2021 4.0.4 |
 
-完整规则与冲突处理见 `docs/rule_engine_notes.md`。
+三项检查（防火分区面积 / 疏散距离 / 防火间距）均由 `tools/rule_engine.py` + `rules/rules.json` 统一驱动。完整规则与冲突处理见 `docs/rule_engine_notes.md`。
 
 ## 依赖与环境
 
