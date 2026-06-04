@@ -155,12 +155,18 @@ class ImageViewer(QGraphicsView):
         self.setDragMode(QGraphicsView.ScrollHandDrag)
         self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
         self._item = None
-        self._empty = QLabel("（运行后在此预览结果图）", self)
+        self._empty = QLabel("🖼\n\n运行后，结果图在此预览\n滚轮缩放 · 拖动平移", self)
         self._empty.setObjectName("Drop"); self._empty.setAlignment(Qt.AlignCenter)
+        self._empty.setStyleSheet("color:#aab0bb; font-size:14px; line-height:1.6;")
 
     def resizeEvent(self, e):
         super().resizeEvent(e)
         self._empty.setGeometry(self.rect())
+
+    def show_empty(self, text=None):
+        if text:
+            self._empty.setText(text)
+        self._empty.show()
 
     def load(self, path):
         if not path or not os.path.exists(path):

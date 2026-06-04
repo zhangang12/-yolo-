@@ -4,7 +4,7 @@ import os
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QButtonGroup, QStackedWidget,
-    QSpinBox, QComboBox, QLabel, QSplitter,
+    QSpinBox, QComboBox, QLabel, QSplitter, QGridLayout,
 )
 from ui_common import (card, h1, hint, section, PathRow, ImageViewer, LogConsole, ProcRunner)
 
@@ -61,19 +61,28 @@ class TrainPage(QWidget):
         right.setSizes([460, 260])
         root.addWidget(right, 1)
 
+    @staticmethod
+    def _grid(items):
+        """把 [(标签,控件)...] 排成两列网格，整齐对齐、控件列等宽填充。"""
+        g = QGridLayout(); g.setHorizontalSpacing(10); g.setVerticalSpacing(8)
+        g.setContentsMargins(0, 0, 0, 0)
+        for i, (lab, wid) in enumerate(items):
+            r, c = divmod(i, 2)
+            g.addWidget(section(lab), r, c * 2)
+            g.addWidget(wid, r, c * 2 + 1)
+        g.setColumnStretch(1, 1); g.setColumnStretch(3, 1)
+        return g
+
     # ---------- ① 建数据集 ----------
     def _page_build(self):
         w = QWidget(); v = QVBoxLayout(w); v.setContentsMargins(0, 0, 0, 0); v.setSpacing(10)
         self.b_anno = PathRow("标注目录", "dir")
         self.b_out = PathRow("输出数据集", "dir")
-        row = QHBoxLayout()
-        row.addWidget(section("切片")); self.b_tile = QSpinBox(); self.b_tile.setRange(0, 4096); self.b_tile.setValue(1024)
-        row.addWidget(self.b_tile)
-        row.addWidget(section("重叠")); self.b_ov = QSpinBox(); self.b_ov.setRange(0, 1024); self.b_ov.setValue(128)
-        row.addWidget(self.b_ov)
-        row.addWidget(section("seed")); self.b_seed = QSpinBox(); self.b_seed.setRange(0, 9999)
-        row.addWidget(self.b_seed); row.addStretch(1)
-        v.addWidget(self.b_anno); v.addWidget(self.b_out); v.addLayout(row)
+        self.b_tile = QSpinBox(); self.b_tile.setRange(0, 4096); self.b_tile.setValue(1024)
+        self.b_ov = QSpinBox(); self.b_ov.setRange(0, 1024); self.b_ov.setValue(128)
+        self.b_seed = QSpinBox(); self.b_seed.setRange(0, 9999)
+        v.addWidget(self.b_anno); v.addWidget(self.b_out)
+        v.addLayout(self._grid([("切片", self.b_tile), ("重叠", self.b_ov), ("seed", self.b_seed)]))
         v.addWidget(hint("标注目录需成对存在 CVAT xml 与底图。box/polygon 转归一化多边形，"
                          "polyline(尺寸线)自动跳过；切片=0 表示不切。完成后 data.yaml 自动填到“训练”页。"))
         return w
@@ -90,20 +99,15 @@ class TrainPage(QWidget):
         row1.addWidget(self.t_model, 1)
         v.addWidget(self.t_data); v.addLayout(row1)
 
-        row2 = QHBoxLayout()
-        row2.addWidget(section("epochs")); self.t_ep = QSpinBox(); self.t_ep.setRange(1, 2000); self.t_ep.setValue(100)
-        row2.addWidget(self.t_ep)
-        row2.addWidget(section("imgsz")); self.t_imgsz = QSpinBox(); self.t_imgsz.setRange(320, 2048); self.t_imgsz.setSingleStep(64); self.t_imgsz.setValue(1024)
-        row2.addWidget(self.t_imgsz)
-        v.addLayout(row2)
-        row3 = QHBoxLayout()
-        row3.addWidget(section("batch")); self.t_batch = QSpinBox(); self.t_batch.setRange(1, 128); self.t_batch.setValue(8)
-        row3.addWidget(self.t_batch)
-        row3.addWidget(section("patience")); self.t_pat = QSpinBox(); self.t_pat.setRange(0, 500); self.t_pat.setValue(20)
-        row3.addWidget(self.t_pat)
-        row3.addWidget(section("device")); self.t_dev = QComboBox(); self.t_dev.setEditable(True)
+        self.t_ep = QSpinBox(); self.t_ep.setRange(1, 2000); self.t_ep.setValue(100)
+        self.t_imgsz = QSpinBox(); self.t_imgsz.setRange(320, 2048); self.t_imgsz.setSingleStep(64); self.t_imgsz.setValue(1024)
+        self.t_batch = QSpinBox(); self.t_batch.setRange(1, 128); self.t_batch.setValue(8)
+        self.t_pat = QSpinBox(); self.t_pat.setRange(0, 500); self.t_pat.setValue(20)
+        self.t_dev = QComboBox(); self.t_dev.setEditable(True)
         self.t_dev.addItems(["", "0", "cpu"]); self.t_dev.setCurrentText("")
-        row3.addWidget(self.t_dev); v.addLayout(row3)
+        v.addLayout(self._grid([("epochs", self.t_ep), ("imgsz", self.t_imgsz),
+                                ("batch", self.t_batch), ("patience", self.t_pat),
+                                ("device", self.t_dev)]))
         v.addWidget(hint("从预训练权重迁移学习（别从零训）。device 留空=自动选 GPU/CPU；目标小，imgsz 用 1024 配切片。"))
         return w
 
