@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QPushButton,
     QButtonGroup, QStackedWidget, QLabel,
 )
-from ui_common import THEME
+from ui_common import full_theme
 from page_prepare import PreparePage
 from page_e2e import E2EPage
 from page_train import TrainPage
@@ -36,6 +36,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("消防图纸 AI 预审 · 客户端")
         self.resize(1280, 800)
+        self.setMinimumSize(1000, 640)   # 防止窗口拖太窄时右侧预览/日志被挤没
         central = QWidget(); central.setObjectName("Root")
         self.setCentralWidget(central)
         root = QHBoxLayout(central); root.setContentsMargins(0, 0, 0, 0); root.setSpacing(0)
@@ -70,7 +71,7 @@ class MainWindow(QMainWindow):
 
 def main():
     app = QApplication(sys.argv)
-    app.setStyleSheet(THEME)
+    app.setStyleSheet(full_theme())
     win = MainWindow(); win.show()
     sys.exit(app.exec())
 

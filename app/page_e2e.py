@@ -10,8 +10,8 @@ from ui_common import (card, h1, hint, section, PathRow, ImageViewer, LogConsole
 TOOL = "tools/e2e_demo.py"
 REPORT = "tools/report_docx.py"
 
-STAGES = ["① 识别 (文字层直读 / OCR)", "② 结构化 (面积/类型/距离)",
-          "③ 规范比对 (规则引擎)", "④ 原图标注 (回写)"]
+STAGES = ["① 识别图纸内容（文字 / 尺寸）", "② 计算面积、类型、疏散距离",
+          "③ 对照消防规范逐条比对", "④ 在原图标出问题位置"]
 
 
 class E2EPage(QWidget):
@@ -26,20 +26,22 @@ class E2EPage(QWidget):
         root = QHBoxLayout(self); root.setContentsMargins(18, 18, 18, 18); root.setSpacing(16)
 
         left = card(); lv = QVBoxLayout(left); lv.setContentsMargins(18, 18, 18, 18); lv.setSpacing(12)
-        lv.addWidget(h1("端到端预审 Demo"))
-        lv.addWidget(hint("矢量 PDF 一条龙跑通五阶段，产出结构化 JSON + 标注版 PNG/PDF。\n"
-                          "优先读图纸文字层：防火分区面积精确、带规范出处；图纸未写明面积时回退 OCR 识别（含噪声）。"))
+        lv.addWidget(h1("端到端预审"))
+        lv.addWidget(hint("拖入一张图纸 PDF，自动跑完「识别 → 计算 → 对照规范 → 标注」全流程，"
+                          "最后给出一张标好问题的图和一份结论。\n"
+                          "优先直接读图纸上的文字（面积准、带规范出处）；图纸没写明时才用 OCR 自动识别（可能有误差）。"))
 
-        self.pdf = PathRow("矢量 PDF", "pdf", "PDF (*.pdf)")
-        self.out = PathRow("输出目录", "dir")
+        self.pdf = PathRow("图纸 PDF", "pdf", "PDF (*.pdf)")
+        self.out = PathRow("结果存到", "dir", placeholder="留空＝在 PDF 旁新建 e2e_out 文件夹")
         lv.addWidget(self.pdf); lv.addWidget(self.out)
 
         row = QHBoxLayout()
-        row.addWidget(section("页码")); self.page = QSpinBox(); self.page.setRange(0, 999)
+        row.addWidget(section("第几页")); self.page = QSpinBox(); self.page.setRange(0, 999)
         row.addWidget(self.page); row.addSpacing(16)
-        row.addWidget(section("DPI")); self.dpi = QSpinBox(); self.dpi.setRange(72, 600); self.dpi.setValue(200)
+        row.addWidget(section("清晰度")); self.dpi = QSpinBox(); self.dpi.setRange(72, 600); self.dpi.setValue(200)
         row.addWidget(self.dpi); row.addStretch(1)
         lv.addLayout(row)
+        lv.addWidget(hint("需用矢量 PDF（能用鼠标选中文字的那种）；页码从 0 开始数，清晰度默认 200 够用。"))
 
         # 阶段指示灯
         lv.addWidget(section("流程进度"))

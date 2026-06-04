@@ -2,7 +2,7 @@
 """客户端公共件：主题样式、文件选择行、可缩放图片查看器、日志台、子进程执行器。"""
 import os, sys
 from PySide6.QtCore import Qt, QObject, Signal, QProcess, QProcessEnvironment
-from PySide6.QtGui import QPixmap, QPainter, QFont, QColor, QIcon, QPixmap as _Px
+from PySide6.QtGui import QPixmap, QPainter, QFont, QColor, QIcon, QTextCursor, QPixmap as _Px
 from PySide6.QtWidgets import (
     QWidget, QLabel, QLineEdit, QPushButton, QHBoxLayout, QVBoxLayout,
     QFileDialog, QGraphicsView, QGraphicsScene, QPlainTextEdit, QFrame, QSizePolicy,
@@ -47,6 +47,9 @@ QPushButton:disabled { color: #aab0bb; background: #f4f5f7; border: 1px solid #e
 QPushButton#Primary { background: #2f6fed; border: none; color: #ffffff; font-weight: 600; }
 QPushButton#Primary:hover { background: #195fe6; }
 QPushButton#Primary:disabled { background: #aac3f6; color: #ffffff; }
+/* 分段切换按钮：选中态高亮，让用户看清当前在哪个工具 */
+QPushButton#Seg { padding: 7px 10px; }
+QPushButton#Seg:checked { background: #eaf1ff; border: 1px solid #2f6fed; color: #2f6fed; font-weight: 600; }
 QPushButton#Danger { background: #fdecef; border: 1px solid #f3c2cb; color: #d6336c; }
 QPushButton#Danger:hover { background: #fbdce2; }
 
@@ -62,10 +65,21 @@ QLabel#Drop { color: #9aa1ad; }
 
 QComboBox, QSpinBox {
     background: #ffffff; border: 1px solid #d4d9e0; border-radius: 8px; padding: 6px 8px; color: #1f2430;
-    min-width: 60px; min-height: 20px;
+    min-width: 64px; min-height: 22px;
 }
 QComboBox:focus, QSpinBox:focus { border: 1px solid #2f6fed; }
 QComboBox QAbstractItemView { background: #ffffff; selection-background-color: #eaf1ff; selection-color: #2f6fed; border: 1px solid #d4d9e0; }
+
+/* 数字框上下按钮：给足可点区域 + 浅灰底分隔，箭头用系统原生（Windows 下是清晰三角） */
+QSpinBox { padding-right: 22px; }
+QSpinBox::up-button, QSpinBox::down-button {
+    subcontrol-origin: border; width: 20px; background: #eef1f5; border-left: 1px solid #d9dee5;
+}
+QSpinBox::up-button { subcontrol-position: top right; border-top-right-radius: 7px; }
+QSpinBox::down-button { subcontrol-position: bottom right; border-bottom-right-radius: 7px; }
+QSpinBox::up-button:hover, QSpinBox::down-button:hover { background: #dfe6ef; }
+QSpinBox::up-button:pressed, QSpinBox::down-button:pressed { background: #cfd8e3; }
+/* up/down 箭头图标由 full_theme() 运行时生成并注入（见文件末尾 _spin_arrow_css） */
 /* 表格（规则库） */
 QTableWidget {
     background: #ffffff; alternate-background-color: #f7f8fa; gridline-color: #e8ebef;
@@ -196,9 +210,10 @@ class LogConsole(QPlainTextEdit):
         self.setMaximumBlockCount(5000)
 
     def append_text(self, s):
-        self.moveCursor(self.textCursor().End)
+        self.moveCursor(QTextCursor.MoveOperation.End)
         self.insertPlainText(s)
-        self.moveCursor(self.textCursor().End)
+        self.moveCursor(QTextCursor.MoveOperation.End)
+        sb = self.verticalScrollBar(); sb.setValue(sb.maximum())
 
     def banner(self, s):
         self.append_text(f"\n{'─'*60}\n{s}\n{'─'*60}\n")
@@ -246,3 +261,49 @@ class ProcRunner(QObject):
 
     def _on_fin(self, code, _status):
         self.finished.emit(int(code))
+
+
+# ====================== 数字框三角箭头（运行时生成图标） ======================
+def _spin_arrow_css():
+    """生成上/下三角箭头 PNG 并返回引用它们的 QSS。
+
+    Qt 样式表的 ::up-arrow 只认 image，不认 CSS 边框三角；不画 image 时各平台
+    原生箭头表现不一（Fusion 下甚至不可见）。这里用 QPainter 现画两个三角存成
+    PNG，再 image: url() 引用——与平台/风格无关，所见即所得。需 QApplication 已建。
+    """
+    import tempfile
+    from PySide6.QtCore import QPointF
+    from PySide6.QtGui import QPolygonF
+
+    cache = os.path.join(tempfile.gettempdir(), "fireapp_assets")
+    try:
+        os.makedirs(cache, exist_ok=True)
+    except OSError:
+        return ""  # 退化：不注入箭头图标，保留原生箭头，不影响功能
+
+    def _draw(path, up):
+        S = 28  # 高分辨率绘制，downscale 后更锐利
+        pm = QPixmap(S, S); pm.fill(Qt.transparent)
+        p = QPainter(pm); p.setRenderHint(QPainter.Antialiasing)
+        p.setPen(Qt.NoPen); p.setBrush(QColor("#5b6675"))
+        if up:
+            tri = QPolygonF([QPointF(S*0.22, S*0.64), QPointF(S*0.78, S*0.64), QPointF(S*0.50, S*0.34)])
+        else:
+            tri = QPolygonF([QPointF(S*0.22, S*0.36), QPointF(S*0.78, S*0.36), QPointF(S*0.50, S*0.66)])
+        p.drawPolygon(tri); p.end()
+        pm.save(path, "PNG")
+
+    up_p = os.path.join(cache, "spin_up.png"); dn_p = os.path.join(cache, "spin_down.png")
+    try:
+        _draw(up_p, True); _draw(dn_p, False)
+    except Exception:
+        return ""
+    up_url = up_p.replace("\\", "/"); dn_url = dn_p.replace("\\", "/")
+    return ("\nQSpinBox::up-arrow { image: url('%s'); width: 11px; height: 11px; }\n"
+            "QSpinBox::down-arrow { image: url('%s'); width: 11px; height: 11px; }\n"
+            % (up_url, dn_url))
+
+
+def full_theme():
+    """主题 = 基础 QSS + 运行时生成的数字框箭头图标。在 QApplication 创建后调用。"""
+    return THEME + _spin_arrow_css()
