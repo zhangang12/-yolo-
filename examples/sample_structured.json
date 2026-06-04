@@ -9,7 +9,10 @@
         {"id": "EX-1", "leads_to": "ground"}
       ],
       "commercial_shops": [
-        {"id": "SHOP-A"}, {"id": "SHOP-B"}, {"id": "SHOP-C"}, {"id": "SHOP-D"}
+        {"id": "SHOP-A", "area_m2": 28},
+        {"id": "SHOP-B", "area_m2": 35},
+        {"id": "SHOP-C", "area_m2": 25},
+        {"id": "SHOP-D", "area_m2": 18}
       ]
     },
     "equipment_zone": {
@@ -69,5 +72,20 @@
   "vent_pair": [
     {"id": "VP-OK", "kind": "fresh_vs_exhaust_or_piston", "fresh_id": "VF-1", "other_id": "VE-1", "distance_m": 12},
     {"id": "VP-NG", "kind": "fresh_vs_exhaust_or_piston", "fresh_id": "VF-2", "other_id": "VE-2", "distance_m": 7}
+  ],
+  "fire_shutter": [
+    {"id": "SH-LE30-OK",     "opening_width_m": 25, "shutter_width_m": 8},
+    {"id": "SH-LE30-NG",     "opening_width_m": 25, "shutter_width_m": 12},
+    {"id": "SH-GT30-OK",     "opening_width_m": 45, "shutter_width_m": 14},
+    {"id": "SH-GT30-NG",     "opening_width_m": 45, "shutter_width_m": 18},
+    {"id": "SH-GT30-CAP-NG", "opening_width_m": 90, "shutter_width_m": 22}
+  ],
+  "building_clearance": [
+    {"id": "BC-MULTI-OK", "building_name": "周边多层办公楼A", "building_category": "多层民用",       "distance_m": 8,  "nearest_kind": "entrance"},
+    {"id": "BC-MULTI-NG", "building_name": "周边多层住宅B",   "building_category": "多层民用",       "distance_m": 5,  "nearest_kind": "entrance"},
+    {"id": "BC-HIGH-OK",  "building_name": "周边高层写字楼C", "building_category": "高层民用",       "distance_m": 12, "nearest_kind": "vent"},
+    {"id": "BC-HIGH-NG",  "building_name": "周边高层公寓D",   "building_category": "高层民用",       "distance_m": 7,  "nearest_kind": "vent"},
+    {"id": "BC-GAS-OK",   "building_name": "周边加油站E",     "building_category": "加油加气加氢站", "distance_m": 60, "nearest_kind": "entrance"},
+    {"id": "BC-GAS-NG",   "building_name": "周边加氢站F",     "building_category": "加油加气加氢站", "distance_m": 40, "nearest_kind": "entrance"}
   ]
 }
