@@ -48,7 +48,6 @@ class E2EPage(QWidget):
             l = QLabel("○  " + s); l.setObjectName("Hint")
             self.stage_labels.append(l); lv.addWidget(l)
 
-        lv.addStretch(1)
         btns = QHBoxLayout()
         self.run_btn = QPushButton("开始预审"); self.run_btn.setObjectName("Primary"); self.run_btn.clicked.connect(self._run)
         self.stop_btn = QPushButton("停止"); self.stop_btn.setObjectName("Danger"); self.stop_btn.setEnabled(False)
@@ -60,7 +59,9 @@ class E2EPage(QWidget):
         self.report_btn.clicked.connect(self._export_report)
         lv.addWidget(self.report_btn)
         left.setFixedWidth(400)
-        root.addWidget(left)
+        leftcol = QVBoxLayout(); leftcol.setContentsMargins(0, 0, 0, 0); leftcol.setSpacing(0)
+        leftcol.addWidget(left); leftcol.addStretch(1)
+        root.addLayout(leftcol)
 
         # 报告生成用独立子进程（避免与预审任务冲突）
         self.report_runner = ProcRunner(cwd)

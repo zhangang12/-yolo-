@@ -62,6 +62,7 @@ QLabel#Drop { color: #9aa1ad; }
 
 QComboBox, QSpinBox {
     background: #ffffff; border: 1px solid #d4d9e0; border-radius: 8px; padding: 6px 8px; color: #1f2430;
+    min-width: 60px; min-height: 20px;
 }
 QComboBox:focus, QSpinBox:focus { border: 1px solid #2f6fed; }
 QComboBox QAbstractItemView { background: #ffffff; selection-background-color: #eaf1ff; selection-color: #2f6fed; border: 1px solid #d4d9e0; }

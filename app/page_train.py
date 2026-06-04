@@ -43,7 +43,6 @@ class TrainPage(QWidget):
         self.stack.addWidget(self._page_train())
         self.stack.addWidget(self._page_val())
         lv.addWidget(self.stack)
-        lv.addStretch(1)
 
         btns = QHBoxLayout()
         self.run_btn = QPushButton("运行"); self.run_btn.setObjectName("Primary"); self.run_btn.clicked.connect(self._run)
@@ -52,7 +51,9 @@ class TrainPage(QWidget):
         btns.addWidget(self.run_btn, 1); btns.addWidget(self.stop_btn)
         lv.addLayout(btns)
         left.setFixedWidth(420)
-        root.addWidget(left)
+        leftcol = QVBoxLayout(); leftcol.setContentsMargins(0, 0, 0, 0); leftcol.setSpacing(0)
+        leftcol.addWidget(left); leftcol.addStretch(1)
+        root.addLayout(leftcol)
 
         right = QSplitter(Qt.Vertical)
         self.viewer = ImageViewer(); self.log = LogConsole()

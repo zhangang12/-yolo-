@@ -44,7 +44,6 @@ class PreparePage(QWidget):
         self.stack.addWidget(self._page_qc())
         self.stack.addWidget(self._page_convert())
         lv.addWidget(self.stack)
-        lv.addStretch(1)
 
         btns = QHBoxLayout()
         self.run_btn = QPushButton("运行"); self.run_btn.setObjectName("Primary")
@@ -54,7 +53,9 @@ class PreparePage(QWidget):
         btns.addWidget(self.run_btn, 1); btns.addWidget(self.stop_btn)
         lv.addLayout(btns)
         left.setFixedWidth(400)
-        root.addWidget(left)
+        leftcol = QVBoxLayout(); leftcol.setContentsMargins(0, 0, 0, 0); leftcol.setSpacing(0)
+        leftcol.addWidget(left); leftcol.addStretch(1)
+        root.addLayout(leftcol)
 
         # ---------- 右：预览 + 日志 ----------
         right = QSplitter(Qt.Vertical)
