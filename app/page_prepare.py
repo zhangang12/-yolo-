@@ -27,13 +27,14 @@ class PreparePage(QWidget):
         # ---------- 左：控制区 ----------
         left = card(); lv = QVBoxLayout(left); lv.setContentsMargins(18, 18, 18, 18); lv.setSpacing(12)
         lv.addWidget(h1("数据准备"))
-        lv.addWidget(hint("标注三件套：从矢量 PDF 自动预标注、按 schema 质检、中文标签转英文。"))
+        lv.addWidget(hint("为 AI 训练准备标注数据。三个工具：预标注（自动框出元素）、"
+                          "质检（查标注错漏）、转换（中文标签转英文）。"))
 
         # 操作切换（segmented）
         seg = QHBoxLayout(); seg.setSpacing(6)
         self.bg = QButtonGroup(self); self.bg.setExclusive(True)
-        for i, (key, name) in enumerate([("prelabel", "预标注"), ("qc", "质检 QC"), ("convert", "转换")]):
-            b = QPushButton(name); b.setCheckable(True); b.setProperty("op", key)
+        for i, (key, name) in enumerate([("prelabel", "预标注"), ("qc", "质检"), ("convert", "转换")]):
+            b = QPushButton(name); b.setObjectName("Seg"); b.setCheckable(True); b.setProperty("op", key)
             if i == 0: b.setChecked(True)
             b.clicked.connect(lambda _, k=key: self._switch(k))
             self.bg.addButton(b); seg.addWidget(b)
@@ -44,17 +45,18 @@ class PreparePage(QWidget):
         self.stack.addWidget(self._page_qc())
         self.stack.addWidget(self._page_convert())
         lv.addWidget(self.stack)
-        lv.addStretch(1)
 
         btns = QHBoxLayout()
-        self.run_btn = QPushButton("运行"); self.run_btn.setObjectName("Primary")
+        self.run_btn = QPushButton("开始预标注"); self.run_btn.setObjectName("Primary")
         self.run_btn.clicked.connect(self._run)
         self.stop_btn = QPushButton("停止"); self.stop_btn.setObjectName("Danger")
         self.stop_btn.clicked.connect(self.runner.stop); self.stop_btn.setEnabled(False)
         btns.addWidget(self.run_btn, 1); btns.addWidget(self.stop_btn)
         lv.addLayout(btns)
         left.setFixedWidth(400)
-        root.addWidget(left)
+        leftcol = QVBoxLayout(); leftcol.setContentsMargins(0, 0, 0, 0); leftcol.setSpacing(0)
+        leftcol.addWidget(left); leftcol.addStretch(1)
+        root.addLayout(leftcol)
 
         # ---------- 右：预览 + 日志 ----------
         right = QSplitter(Qt.Vertical)
@@ -67,30 +69,40 @@ class PreparePage(QWidget):
     # ---- 三套表单 ----
     def _page_prelabel(self):
         w = QWidget(); v = QVBoxLayout(w); v.setContentsMargins(0, 0, 0, 0); v.setSpacing(10)
-        self.pl_pdf = PathRow("矢量 PDF", "pdf", "PDF (*.pdf)")
-        self.pl_out = PathRow("输出目录", "dir")
+        v.addWidget(hint("自动在图纸上框出文字、尺寸线、防火分区等元素并预先分类，人工只需复查纠正，"
+                         "不用从白纸开始一个个画。\n"
+                         "请用矢量 PDF（能用鼠标选中文字的那种，一般由 CAD / 天正导出）；扫描件、拍照图不行。"))
+        self.pl_pdf = PathRow("图纸 PDF", "pdf", "PDF (*.pdf)")
+        self.pl_out = PathRow("结果存到", "dir", placeholder="留空＝存到原 PDF 所在文件夹")
         row = QHBoxLayout()
-        row.addWidget(section("页码")); self.pl_page = QSpinBox(); self.pl_page.setRange(0, 999)
+        row.addWidget(section("第几页")); self.pl_page = QSpinBox(); self.pl_page.setRange(0, 999)
         row.addWidget(self.pl_page)
         row.addSpacing(16)
-        row.addWidget(section("DPI")); self.pl_dpi = QSpinBox(); self.pl_dpi.setRange(72, 600); self.pl_dpi.setValue(200)
+        row.addWidget(section("清晰度")); self.pl_dpi = QSpinBox(); self.pl_dpi.setRange(72, 600); self.pl_dpi.setValue(200)
         row.addWidget(self.pl_dpi); row.addStretch(1)
         v.addWidget(self.pl_pdf); v.addWidget(self.pl_out); v.addLayout(row)
+        v.addWidget(hint("页码从 0 开始数；清晰度默认 200 够用，调大更清晰但更慢。"))
 
-        # 增强选项
-        self.pl_pro = QCheckBox("增强预标注（语义细分 + 可审核）"); self.pl_pro.setChecked(True)
+        # 智能模式开关
+        self.pl_pro = QCheckBox("智能模式：自动分类 + 标出拿不准的（推荐）"); self.pl_pro.setChecked(True)
         self.pl_pro.toggled.connect(self._toggle_pro)
         v.addWidget(self.pl_pro)
-        self.pro_box = QWidget(); pb = QHBoxLayout(self.pro_box); pb.setContentsMargins(0, 0, 0, 0)
-        pb.addWidget(section("图类型")); self.pl_type = QComboBox(); self.pl_type.addItems(["auto", "site", "hall"])
-        pb.addWidget(self.pl_type)
-        self.pl_ocr = QCheckBox("OCR 读内容(需 tesseract)"); pb.addWidget(self.pl_ocr)
-        self.pl_qc = QCheckBox("完成后自动质检"); self.pl_qc.setChecked(True); pb.addWidget(self.pl_qc)
-        pb.addStretch(1)
+        self.pro_box = QWidget(); pb = QVBoxLayout(self.pro_box)
+        pb.setContentsMargins(20, 2, 0, 0); pb.setSpacing(8)
+        trow = QHBoxLayout(); trow.setSpacing(8)
+        trow.addWidget(section("图纸类型"))
+        self.pl_type = QComboBox()
+        for label, val in [("自动识别", "auto"), ("总平面图", "site"), ("站厅层", "hall")]:
+            self.pl_type.addItem(label, val)
+        trow.addWidget(self.pl_type); trow.addStretch(1)
+        pb.addLayout(trow)
+        self.pl_ocr = QCheckBox("顺便识别文字内容（需先装 OCR 组件 tesseract）")
+        pb.addWidget(self.pl_ocr)
+        self.pl_qc = QCheckBox("完成后自动检查一遍标注质量"); self.pl_qc.setChecked(True)
+        pb.addWidget(self.pl_qc)
         v.addWidget(self.pro_box)
-        v.addWidget(hint("增强版：文字/线/区域按语义细分，橙/红=待审、青/绿=较确定，另出确认清单 _review.txt。\n"
-                         "OCR 关闭时文字内容留空、统一待审（装 tesseract 勾上 OCR 可自动填内容并分类）。\n"
-                         "基础版（取消勾选）：黄=文字块、紫=尺寸线、红=区域候选，不分子类。"))
+        v.addWidget(hint("开：按类别细分，拿不准的用醒目颜色标成「待审」，并另存一份待确认清单供人工核对。\n"
+                         "关：只做基础框选（文字 / 尺寸线 / 区域 三类），不再细分类别。"))
         return w
 
     def _toggle_pro(self, on):
@@ -98,25 +110,32 @@ class PreparePage(QWidget):
 
     def _page_qc(self):
         w = QWidget(); v = QVBoxLayout(w); v.setContentsMargins(0, 0, 0, 0); v.setSpacing(10)
-        self.qc_xml = PathRow("标注 XML", "file", "CVAT XML (*.xml)")
+        v.addWidget(hint("检查一份已经标注好的文件有没有错漏。"))
+        self.qc_xml = PathRow("标注文件", "file", "CVAT XML (*.xml)")
         row = QHBoxLayout(); row.addWidget(section("图纸类型"))
-        self.qc_type = QComboBox(); self.qc_type.addItems(["auto", "hall", "site"])
+        self.qc_type = QComboBox()
+        for label, val in [("自动识别", "auto"), ("站厅层", "hall"), ("总平面图", "site")]:
+            self.qc_type.addItem(label, val)
         row.addWidget(self.qc_type); row.addStretch(1)
         v.addWidget(self.qc_xml); v.addLayout(row)
-        v.addWidget(hint("按 schema 检查标签合法性/几何/必填/枚举/必现类缺失/数量异常，结果见下方日志。"))
+        v.addWidget(hint("逐项检查：标签是否合法、该填的属性有没有填、有没有漏标必须出现的元素、"
+                         "某类数量是否异常。结果看下方日志。"))
         return w
 
     def _page_convert(self):
         w = QWidget(); v = QVBoxLayout(w); v.setContentsMargins(0, 0, 0, 0); v.setSpacing(10)
-        self.cv_in = PathRow("输入 XML", "file", "CVAT XML (*.xml)")
-        self.cv_out = PathRow("输出 XML", "save", "CVAT XML (*.xml)")
+        v.addWidget(hint("把标注里的中文标签转成英文——AI 训练需要英文标签。"))
+        self.cv_in = PathRow("原标注文件", "file", "CVAT XML (*.xml)")
+        self.cv_out = PathRow("输出到", "save", "CVAT XML (*.xml)")
         v.addWidget(self.cv_in); v.addWidget(self.cv_out)
-        v.addWidget(hint("中文标签/属性键转英文 snake_case，带“漏转自检”（没映射到的会报出来）。输出可留空，默认 *_en.xml。"))
+        v.addWidget(hint("中文标签、属性名转成英文，并自动揪出没配上对照表的漏网项。\n"
+                         "「输出到」留空时，默认存成原文件名加 _en（如 a.xml → a_en.xml）。"))
         return w
 
     def _switch(self, key):
         self._cur_op = key
         self.stack.setCurrentIndex({"prelabel": 0, "qc": 1, "convert": 2}[key])
+        self.run_btn.setText({"prelabel": "开始预标注", "qc": "开始质检", "convert": "开始转换"}[key])
 
     # ---- 运行 ----
     def _run(self):
@@ -132,7 +151,7 @@ class PreparePage(QWidget):
             if self.pl_pro.isChecked():
                 # 增强版：app/backend/prelabel_pro.py
                 args = [pdf, out_dir, "--page", page, "--dpi", self.pl_dpi.value(),
-                        "--type", self.pl_type.currentText()]
+                        "--type", self.pl_type.currentData()]
                 if self.pl_ocr.isChecked(): args.append("--ocr")
                 if self.pl_qc.isChecked(): args.append("--qc")
                 self._preview_path = os.path.join(out_dir, f"{base}_p{page}_overlay.jpg")
@@ -147,7 +166,7 @@ class PreparePage(QWidget):
             xml = self.qc_xml.text()
             if not xml:
                 self.log.append_text("⚠️ 请先选择标注 XML。\n"); return
-            args = ["qc", xml, "--type", self.qc_type.currentText()]
+            args = ["qc", xml, "--type", self.qc_type.currentData()]
         else:  # convert
             inp = self.cv_in.text()
             if not inp:

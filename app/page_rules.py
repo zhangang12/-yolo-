@@ -80,12 +80,14 @@ class RulesPage(QWidget):
         lv.addWidget(section("两类条文"))
         lv.addWidget(hint("🔴 强制条文：必须满足，不满足即不通过。\n🟠 建议条文：宜满足，不满足给提醒。"))
 
-        lv.addStretch(1)
+        lv.addSpacing(4)
         self.try_btn = QPushButton("试运行（用示例数据演示）"); self.try_btn.setObjectName("Primary")
         self.try_btn.clicked.connect(self._try_run)
         lv.addWidget(self.try_btn)
         left.setFixedWidth(360)
-        root.addWidget(left)
+        leftcol = QVBoxLayout(); leftcol.setContentsMargins(0, 0, 0, 0); leftcol.setSpacing(0)
+        leftcol.addWidget(left); leftcol.addStretch(1)
+        root.addLayout(leftcol)
 
         # ---------- 右：规则表 + 日志 ----------
         right = QSplitter(Qt.Vertical)

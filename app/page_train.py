@@ -4,7 +4,7 @@ import os
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QButtonGroup, QStackedWidget,
-    QSpinBox, QComboBox, QLabel, QSplitter,
+    QSpinBox, QComboBox, QLabel, QSplitter, QGridLayout,
 )
 from ui_common import (card, h1, hint, section, PathRow, ImageViewer, LogConsole, ProcRunner)
 
@@ -27,12 +27,13 @@ class TrainPage(QWidget):
 
         left = card(); lv = QVBoxLayout(left); lv.setContentsMargins(18, 18, 18, 18); lv.setSpacing(12)
         lv.addWidget(h1("YOLO 训练"))
-        lv.addWidget(hint("YOLO 只负责“识别”一环。从标注切片开始：建数据集 → 迁移学习训练 → 评估每类 P/R 与 mAP。"))
+        lv.addWidget(hint("训练 AI 的「眼睛」——让它学会认出图纸上的元素。三步：① 把标注好的图整理成训练集 → "
+                          "② 训练 → ③ 评估认得准不准。\n面向会调模型的人：保留 epochs/imgsz 等术语，旁边都配了说明。"))
 
         seg = QHBoxLayout(); seg.setSpacing(6)
         self.bg = QButtonGroup(self); self.bg.setExclusive(True)
         for i, (k, n) in enumerate([("build", "① 建数据集"), ("train", "② 训练"), ("val", "③ 评估")]):
-            b = QPushButton(n); b.setCheckable(True)
+            b = QPushButton(n); b.setObjectName("Seg"); b.setCheckable(True)
             if i == 0: b.setChecked(True)
             b.clicked.connect(lambda _, kk=k: self._switch(kk))
             self.bg.addButton(b); seg.addWidget(b)
@@ -43,16 +44,17 @@ class TrainPage(QWidget):
         self.stack.addWidget(self._page_train())
         self.stack.addWidget(self._page_val())
         lv.addWidget(self.stack)
-        lv.addStretch(1)
 
         btns = QHBoxLayout()
-        self.run_btn = QPushButton("运行"); self.run_btn.setObjectName("Primary"); self.run_btn.clicked.connect(self._run)
+        self.run_btn = QPushButton("开始建数据集"); self.run_btn.setObjectName("Primary"); self.run_btn.clicked.connect(self._run)
         self.stop_btn = QPushButton("停止"); self.stop_btn.setObjectName("Danger"); self.stop_btn.setEnabled(False)
         self.stop_btn.clicked.connect(self.runner.stop)
         btns.addWidget(self.run_btn, 1); btns.addWidget(self.stop_btn)
         lv.addLayout(btns)
         left.setFixedWidth(420)
-        root.addWidget(left)
+        leftcol = QVBoxLayout(); leftcol.setContentsMargins(0, 0, 0, 0); leftcol.setSpacing(0)
+        leftcol.addWidget(left); leftcol.addStretch(1)
+        root.addLayout(leftcol)
 
         right = QSplitter(Qt.Vertical)
         self.viewer = ImageViewer(); self.log = LogConsole()
@@ -60,27 +62,40 @@ class TrainPage(QWidget):
         right.setSizes([460, 260])
         root.addWidget(right, 1)
 
+    @staticmethod
+    def _grid(items):
+        """把 [(标签,控件)...] 排成两列网格，整齐对齐、控件列等宽填充。"""
+        g = QGridLayout(); g.setHorizontalSpacing(10); g.setVerticalSpacing(8)
+        g.setContentsMargins(0, 0, 0, 0)
+        for i, (lab, wid) in enumerate(items):
+            r, c = divmod(i, 2)
+            g.addWidget(section(lab), r, c * 2)
+            g.addWidget(wid, r, c * 2 + 1)
+        g.setColumnStretch(1, 1); g.setColumnStretch(3, 1)
+        return g
+
     # ---------- ① 建数据集 ----------
     def _page_build(self):
         w = QWidget(); v = QVBoxLayout(w); v.setContentsMargins(0, 0, 0, 0); v.setSpacing(10)
         self.b_anno = PathRow("标注目录", "dir")
-        self.b_out = PathRow("输出数据集", "dir")
-        row = QHBoxLayout()
-        row.addWidget(section("切片")); self.b_tile = QSpinBox(); self.b_tile.setRange(0, 4096); self.b_tile.setValue(1024)
-        row.addWidget(self.b_tile)
-        row.addWidget(section("重叠")); self.b_ov = QSpinBox(); self.b_ov.setRange(0, 1024); self.b_ov.setValue(128)
-        row.addWidget(self.b_ov)
-        row.addWidget(section("seed")); self.b_seed = QSpinBox(); self.b_seed.setRange(0, 9999)
-        row.addWidget(self.b_seed); row.addStretch(1)
-        v.addWidget(self.b_anno); v.addWidget(self.b_out); v.addLayout(row)
-        v.addWidget(hint("标注目录需成对存在 CVAT xml 与底图。box/polygon 转归一化多边形，"
-                         "polyline(尺寸线)自动跳过；切片=0 表示不切。完成后 data.yaml 自动填到“训练”页。"))
+        self.b_out = PathRow("数据集存到", "dir")
+        self.b_tile = QSpinBox(); self.b_tile.setRange(0, 4096); self.b_tile.setValue(1024)
+        self.b_ov = QSpinBox(); self.b_ov.setRange(0, 1024); self.b_ov.setValue(128)
+        self.b_seed = QSpinBox(); self.b_seed.setRange(0, 9999)
+        v.addWidget(self.b_anno); v.addWidget(self.b_out)
+        v.addLayout(self._grid([("切片大小", self.b_tile), ("切片重叠", self.b_ov), ("随机种子", self.b_seed)]))
+        v.addWidget(hint("把标注好的数据整理成 AI 能训练的格式。\n"
+                         "• 标注目录里要有标注文件(.xml)和对应底图，成对存放。\n"
+                         "• 图大、目标小，需切成小块训练：切片大小默认 1024，块之间留点重叠（默认 128）"
+                         "免得目标被切断；填 0 ＝ 不切。\n"
+                         "• 随机种子：固定它，每次划分训练 / 验证集的结果都一样，便于复现。\n"
+                         "• 完成后自动生成配置文件，并填到「训练」「评估」页。"))
         return w
 
     # ---------- ② 训练 ----------
     def _page_train(self):
         w = QWidget(); v = QVBoxLayout(w); v.setContentsMargins(0, 0, 0, 0); v.setSpacing(10)
-        self.t_data = PathRow("data.yaml", "file", "YAML (*.yaml *.yml)")
+        self.t_data = PathRow("数据集配置", "file", "YAML (*.yaml *.yml)")
         row1 = QHBoxLayout()
         row1.addWidget(section("预训练权重"))
         self.t_model = QComboBox(); self.t_model.setEditable(True)
@@ -89,38 +104,41 @@ class TrainPage(QWidget):
         row1.addWidget(self.t_model, 1)
         v.addWidget(self.t_data); v.addLayout(row1)
 
-        row2 = QHBoxLayout()
-        row2.addWidget(section("epochs")); self.t_ep = QSpinBox(); self.t_ep.setRange(1, 2000); self.t_ep.setValue(100)
-        row2.addWidget(self.t_ep)
-        row2.addWidget(section("imgsz")); self.t_imgsz = QSpinBox(); self.t_imgsz.setRange(320, 2048); self.t_imgsz.setSingleStep(64); self.t_imgsz.setValue(1024)
-        row2.addWidget(self.t_imgsz)
-        v.addLayout(row2)
-        row3 = QHBoxLayout()
-        row3.addWidget(section("batch")); self.t_batch = QSpinBox(); self.t_batch.setRange(1, 128); self.t_batch.setValue(8)
-        row3.addWidget(self.t_batch)
-        row3.addWidget(section("patience")); self.t_pat = QSpinBox(); self.t_pat.setRange(0, 500); self.t_pat.setValue(20)
-        row3.addWidget(self.t_pat)
-        row3.addWidget(section("device")); self.t_dev = QComboBox(); self.t_dev.setEditable(True)
+        self.t_ep = QSpinBox(); self.t_ep.setRange(1, 2000); self.t_ep.setValue(100)
+        self.t_imgsz = QSpinBox(); self.t_imgsz.setRange(320, 2048); self.t_imgsz.setSingleStep(64); self.t_imgsz.setValue(1024)
+        self.t_batch = QSpinBox(); self.t_batch.setRange(1, 128); self.t_batch.setValue(8)
+        self.t_pat = QSpinBox(); self.t_pat.setRange(0, 500); self.t_pat.setValue(20)
+        self.t_dev = QComboBox(); self.t_dev.setEditable(True)
         self.t_dev.addItems(["", "0", "cpu"]); self.t_dev.setCurrentText("")
-        row3.addWidget(self.t_dev); v.addLayout(row3)
-        v.addWidget(hint("从预训练权重迁移学习（别从零训）。device 留空=自动选 GPU/CPU；目标小，imgsz 用 1024 配切片。"))
+        v.addLayout(self._grid([("epochs", self.t_ep), ("imgsz", self.t_imgsz),
+                                ("batch", self.t_batch), ("patience", self.t_pat),
+                                ("device", self.t_dev)]))
+        v.addWidget(hint("从预训练模型接着学（别从零训，省时省数据）。各参数：\n"
+                         "• epochs 训练轮数，越多越久，先 100 轮试；patience 连续多少轮没进步就提前停（默认 20）。\n"
+                         "• imgsz 训练用的图片边长，目标小就用大图 1024（和切片对齐）；batch 一次喂几张，显存不够就调小。\n"
+                         "• device 留空 ＝ 自动选 GPU/CPU，也可填 0（第一块显卡）或 cpu。\n"
+                         "• 「数据集配置」就是上一步「建数据集」生成的那个文件；首次训练会联网下载预训练权重，请稍等。"))
         return w
 
     # ---------- ③ 评估 ----------
     def _page_val(self):
         w = QWidget(); v = QVBoxLayout(w); v.setContentsMargins(0, 0, 0, 0); v.setSpacing(10)
-        self.v_data = PathRow("data.yaml", "file", "YAML (*.yaml *.yml)")
-        self.v_weights = PathRow("权重 .pt", "file", "权重 (*.pt)")
+        self.v_data = PathRow("数据集配置", "file", "YAML (*.yaml *.yml)")
+        self.v_weights = PathRow("训练好的权重", "file", "权重 (*.pt)")
         row = QHBoxLayout()
         row.addWidget(section("imgsz")); self.v_imgsz = QSpinBox(); self.v_imgsz.setRange(320, 2048); self.v_imgsz.setSingleStep(64); self.v_imgsz.setValue(1024)
         row.addWidget(self.v_imgsz); row.addStretch(1)
         v.addWidget(self.v_data); v.addWidget(self.v_weights); v.addLayout(row)
-        v.addWidget(hint("用 best.pt 在验证集上评估：看整体 mAP50 与每类 P/R，混淆矩阵会显示在上方。"))
+        v.addWidget(hint("检验训练出的模型认得准不准。\n"
+                         "• 权重选训练产出的 best.pt（一般在 runs/exp/weights/ 下）。\n"
+                         "• 主要看两个数：mAP50 ＝ 整体准确度（越高越好）；每类的查准率 / 查全率（P/R）。\n"
+                         "• 混淆矩阵图会显示在右上方，能看出哪类元素容易认错。"))
         return w
 
     def _switch(self, k):
         self._cur = k
         self.stack.setCurrentIndex({"build": 0, "train": 1, "val": 2}[k])
+        self.run_btn.setText({"build": "开始建数据集", "train": "开始训练", "val": "开始评估"}[k])
 
     def _on_output(self, s):
         self.log.append_text(s)
