@@ -32,7 +32,7 @@
 | `evac_distance_line` | 疏散距离线 | `id`, `length_m`, `kind`(`any_to_exit`/`door_to_exit_between`/`door_to_exit_deadend`) |
 | `exit` | 安全出口 | `id`, `leads_to`(`ground`/`other`), `direction_group`, `zone`(`public`/`equipment`/`platform`) |
 | `exit_pair` | 出口两两组合（由上游准备） | `id`, `exit_a`, `exit_b`, `relation`(`same_direction`/`adjacent`), `distance_m` |
-| `door` | 门 | `id`, `clear_width_m`(=洞口宽-0.15), `swing_direction`(`evacuation`/`reverse`), `is_evacuation`, `position`(`between_exits`/`dead_end`/`other`), `zone`, `distance_to_nearest_exit_m` |
+| `door` | 门 | `id`, `clear_width_m`(=洞口宽-0.15), `swing_direction`(`evacuation`/`reverse`), `is_evacuation`, `position`(`between_exits`/`dead_end`/`other`), `zone`, `distance_to_nearest_exit_m`, `class`(`甲级`/`乙级`/`unknown`) |
 | `corridor` | 走道/楼梯 | `id`, `kind`(`evac_corridor`/`evac_stair`/`equip_corridor_single`/`equip_corridor_double`/`entrance_passage`), `clear_width_m`, `length_m` |
 | `shop` | 商铺 | `id`, `area_m2` |
 | `shop_pair` | 商铺两两组合 | `id`, `shop_a`, `shop_b`, `opening_distance_m` |
@@ -40,6 +40,19 @@
 | `vent_pair` | 风口两两组合 | `id`, `kind`(`fresh_vs_exhaust_or_piston` 等), `distance_m` |
 | `building_clearance` | 出入口/风亭→周边建筑 防火间距 | `id`, `building_name`, `building_category`(`多层民用`/`高层民用`/`加油加气加氢站`), `distance_m`, `nearest_kind` |
 | `station` | 站点全局对象 | `type`(`underground`/`at_grade`/`elevated`), `height_m`, `transfer_lines`, `public_zone`(含 `exits`, `commercial_shops`, `area_m2`), `equipment_zone` |
+
+### 三 ✻ 标注源对象 → 规则消费对象的映射
+
+标注团队在 CVAT 里产出的是**源对象**（多边形/框 + 属性），由预处理脚本派生成上表中的**规则消费对象**。两层 schema 不一致是正常的：源对象保留人工标注口径，消费对象贴近规则判据。
+
+| 标注源对象（CVAT） | → 规则消费对象 | 字段映射说明 |
+|---|---|---|
+| `surrounding_building` polygon + `name` / `building_type` / `fire_rating` / `floors` / `height_m` 属性 | `building_clearance`（每条防火间距一条） | `building_name ← name`；`building_category ← building_type`；`distance_m` 由几何就近计算；每栋建筑可能对站点出入口/风亭分别派生多条 |
+| `vent_group_ground` polygon + `vent_function` / `discharge_type` / `name` / `area_m2` 属性 | `vent_pair`（两两风亭组合，仅当一方=新风、另一方=排风/活塞风时生成） | `kind ← "fresh_vs_exhaust_or_piston"`（基于 vent_function 配对）；`distance_m` 由几何最近距离计算 |
+| `fire_door` box + `class` / `swing_dir` 属性 | `door` | `class` 直接透传；`swing_direction ← swing_dir`（"顺着疏散方向"→`evacuation`，"逆着疏散方向"→`reverse`）；`clear_width_m` 由洞口宽 − 0.15 算出（洞口宽来自就近尺寸数字） |
+| `fire_compartment` polygon + `zone_type` 属性 | `fire_compartment` | `area_m2` 由几何面积 + 比例尺算出；`zone_type` 透传（公共区→`public`，无人区/有人值守区→`equipment`） |
+
+标注团队**只关心源对象层**，详见 [`docs/标注规范说明_详细版.md`](../docs/标注规范说明_详细版.md)。规则编辑者**只关心消费对象层**（上面那张主表）。
 
 ## 四、`applies_when` 条目
 
