@@ -28,7 +28,42 @@ def pts(el):
         return [(x0,y0),(x1,y0),(x1,y1),(x0,y1)]
     return [tuple(map(float,p.split(","))) for p in el.get("points").split(";")]
 
+# building_type(标注规范 v3) → 规则引擎 building_category 对齐。
+# 两者基本同名；"超高层民用"暂按"高层民用"参与间距判定(更严档规则待补)。
+BUILDING_CAT_MAP = {
+    "多层民用": "多层民用", "高层民用": "高层民用",
+    "超高层民用": "高层民用",          # 暂按高层(≥9m)判，避免漏判
+    "加油加气加氢站": "加油加气加氢站",
+}
+# 有防火间距规则覆盖的类别(用于"未覆盖→提示人工")
+COVERED_CATS = {"多层民用", "高层民用", "加油加气加氢站"}
+
+def attr(at, *keys):
+    """按多个候选键(中/英)取属性，返回第一个非空值。"""
+    for k in keys:
+        v = at.get(k)
+        if v not in (None, ""):
+            return v.strip() if isinstance(v, str) else v
+    return ""
+
+def category_from_height(floors, height_m):
+    """无 building_type 时，用高度/层数兜底推 多层/高层(民用)。"""
+    try:
+        h = float(height_m) if str(height_m).strip() not in ("", "None") else None
+    except (TypeError, ValueError):
+        h = None
+    if h is not None:
+        return "高层民用" if h > 24 else "多层民用"
+    try:
+        f = int(float(floors)) if str(floors).strip() not in ("", "None") else None
+    except (TypeError, ValueError):
+        f = None
+    if f is not None:
+        return "高层民用" if f >= 8 else "多层民用"   # 粗略：≥8 层约 >24m
+    return None
+
 def classify_building(meta):
+    """最后兜底：从 building_meta 文字猜(兼容旧数据 / 属性未填时)。"""
     t = meta or ""
     if any(k in t for k in ("加油","加气","加氢")): return "加油加气加氢站"
     if "高层" in t: return "高层民用"
@@ -44,7 +79,7 @@ def extract_structured(xml_path, station=None):
         if not k: continue
         P=pts(el); at={a.get("name"):a.text for a in el.findall("attribute")}
         c=(sum(p[0] for p in P)/len(P), sum(p[1] for p in P)/len(P))
-        if k=="b": buildings.append(Polygon(P))
+        if k=="b": buildings.append((Polygon(P), at))
         elif k=="exit": attached.append(("出入口",Polygon(P)))
         elif k=="vent": attached.append(("风亭",Polygon(P)))
         elif k=="cl" and len(P)>=2: clines.append(LineString(P))
@@ -64,10 +99,24 @@ def extract_structured(xml_path, station=None):
     def meta_of(poly):
         cc=poly.centroid.coords[0]
         return min(metas,key=lambda m:(m[0][0]-cc[0])**2+(m[0][1]-cc[1])**2)[1] if metas else ""
-    bcs=[]; geo=[]
-    for i,bp in enumerate(buildings):
-        meta=meta_of(bp); name=(meta.split("\n")[0] if meta else f"建筑{i+1}")
-        cat=classify_building(meta)
+    bcs=[]; geo=[]; cat_warns=[]
+    for i,(bp,at) in enumerate(buildings):
+        # 属性优先(标注规范 v3 直接录在 surrounding_building 上)，回退 building_meta 文字
+        btype   = attr(at, "building_type", "建筑类型")
+        name    = attr(at, "name", "建筑名称", "名称")
+        frating = attr(at, "fire_rating", "耐火等级")
+        floors  = attr(at, "floors", "层数")
+        height  = attr(at, "height_m", "建筑高度", "高度")
+        meta    = meta_of(bp)
+        if not name:
+            name = (meta.split("\n")[0] if meta else f"建筑{i+1}")
+        # building_category：building_type 优先 → 高度/层数兜底 → building_meta 文字兜底
+        if btype:
+            cat = BUILDING_CAT_MAP.get(btype, btype)   # 已知映射；未知(厂房/其他)忠实保留
+        else:
+            cat = category_from_height(floors, height) or classify_building(meta)
+        if cat not in COVERED_CATS:
+            cat_warns.append((name, btype or cat))
         near=None; dmin=1e18
         for kind,op in attached:
             d=bp.distance(op)
@@ -75,11 +124,14 @@ def extract_structured(xml_path, station=None):
         dist_m=round(dmin*scale,2) if scale else None
         bid=f"BC-{i+1:02d}"
         bcs.append(dict(id=bid, building_name=name, building_category=cat,
-                        nearest_kind=near[0] if near else None, distance_m=dist_m))
+                        building_type=btype or None, fire_rating=frating or None,
+                        floors=floors or None, height_m=height or None,
+                        nearest_kind=near[0] if near else None, distance_m=dist_m,
+                        _from="annotation_attr" if btype else "fallback_meta"))
         geo.append(dict(id=bid, b=bp, o=near[1] if near else None))
     s=station or {}   # 总平面图无站厅层数据；空 station 使站厅层规则(出口/商铺)不在此触发
     structured=dict(station=s, building_clearance=bcs)
-    return structured, dict(W=W,H=H,scale=scale,geo=geo)
+    return structured, dict(W=W,H=H,scale=scale,geo=geo,cat_warns=cat_warns)
 
 def annotate(pdf, info, findings, out_png):
     import fitz, cv2, numpy as np
@@ -112,6 +164,10 @@ def main():
     structured, info = extract_structured(a.xml)
     n=len(structured["building_clearance"])
     print(f"周边建筑 {n}  比例尺≈{info['scale']*1000:.1f} mm/px" if info["scale"] else f"周边建筑 {n}  ⚠️无法标定比例尺")
+    if info.get("cat_warns"):
+        print("  ⚠️ 以下建筑类型暂无防火间距规则覆盖，需人工复核：")
+        for nm, bt in info["cat_warns"]:
+            print(f"     - {nm}（{bt or '类型未填'}）")
     findings = rule_engine.evaluate(a.rules, structured)
     summ = rule_engine.summarize(findings)
     print(f"== 防火间距评估: 触发 {summ['total']} 项 | PASS {summ['passed']}  FAIL {summ['failed']}  待复核 {summ['review_required']} ==")
