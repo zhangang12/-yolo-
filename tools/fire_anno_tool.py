@@ -38,9 +38,13 @@ MAPPING = {
     "防火间距尺寸数字": "dimension_val",
     # ---- 标签：站厅层 ----
     "防火分区": "fire_compartment",
+    "站厅公共区": "public_area", "公共区": "public_area",
     "商铺": "commercial_shop",
-    "防火门": "fire_door",
+    "安全出口": "safety_exit",
     "楼梯扶梯": "stair_escalator", "楼梯及自动扶梯": "stair_escalator",
+    "闸机": "gate", "进出站闸机": "gate",
+    "防火门": "fire_door",
+    "防火卷帘": "fire_shutter", "特级防火卷帘": "fire_shutter",
     "挡烟垂壁": "draft_curtain",
     "疏散距离线": "evac_distance_line", "公共区最远疏散距离线": "evac_distance_line",
     "宽度控制线": "width_dimension_line", "控制通道宽度尺寸线": "width_dimension_line",
@@ -53,23 +57,43 @@ MAPPING = {
     "宽度": "width",
     "文字内容": "text_content",
     "尺寸": "text_content",   # 补：原脚本漏了这个键，导致"尺寸"残留中文
+    # ---- 属性键：详细版 v3 新增（周边建筑 / 风亭）----
+    "名称": "name", "建筑名称": "name", "风亭名称": "name",
+    "建筑类型": "building_type",
+    "耐火等级": "fire_rating",
+    "层数": "floors",
+    "建筑高度": "height_m", "高度": "height_m",
+    "风亭功能": "vent_function", "通风功能": "vent_function", "风口功能": "vent_function",
+    "出风方式": "discharge_type", "排放方式": "discharge_type", "出风形式": "discharge_type",
+    "面积": "area_m2", "风口面积": "area_m2",
 }
 
 # 每个英文标签的：几何类型 / 所属图纸 / 允许的属性 / 必填属性
 LABELS = {
     # group 'site' = 总平面图, 'hall' = 站厅层
-    "station_exit_ground":  dict(geom="polygon",  group="site", attrs=[],               required=[]),
-    "vent_group_ground":    dict(geom="polygon",  group="site", attrs=[],               required=[]),
-    "surrounding_building": dict(geom="polygon",  group="site", attrs=["text_content"], required=[]),
-    "fire_clearance_line":  dict(geom="polyline", group="site", attrs=["text_content"], required=[]),
+    # ---- 总平面图：标注团队要标的图形/轮廓 ----
+    "station_exit_ground":  dict(geom="polygon",  group="site", attrs=[], required=[]),
+    "vent_group_ground":    dict(geom="polygon",  group="site",
+                                 attrs=["vent_function", "discharge_type", "name", "area_m2"],
+                                 required=["vent_function", "discharge_type"]),
+    "surrounding_building": dict(geom="polygon",  group="site",
+                                 attrs=["name", "building_type", "fire_rating", "floors", "height_m"],
+                                 required=["name", "building_type", "fire_rating"]),
+    # ---- 站厅层：标注团队要标的图形/轮廓 ----
+    "fire_compartment":     dict(geom="polygon",  group="hall", attrs=["zone_type"], required=["zone_type"]),
+    "public_area":          dict(geom="polygon",  group="hall", attrs=[], required=[]),
+    "commercial_shop":      dict(geom="polygon",  group="hall", attrs=[], required=[]),
+    "safety_exit":          dict(geom="box",      group="hall", attrs=[], required=[]),
+    "stair_escalator":      dict(geom="box",      group="hall", attrs=[], required=[]),
+    "gate":                 dict(geom="box",      group="hall", attrs=[], required=[]),
+    "fire_door":            dict(geom="box",      group="hall", attrs=["class", "swing_dir"], required=["class", "swing_dir"]),
+    "fire_shutter":         dict(geom="box",      group="hall", attrs=[], required=[]),
+    "draft_curtain":        dict(geom="box",      group="hall", attrs=[], required=[]),
+    # ---- 文字/尺寸类：v3 由程序从矢量直抽；仅【无文字层】图纸回退人工标，故非必现 ----
     "building_meta":        dict(geom="box",      group="site", attrs=["text_content"], required=["text_content"]),
     "vent_meta":            dict(geom="box",      group="site", attrs=["text_content"], required=["text_content"]),
     "dimension_val":        dict(geom="box",      group="site", attrs=["text_content"], required=["text_content"]),
-    "fire_compartment":     dict(geom="polygon",  group="hall", attrs=["zone_type"],    required=["zone_type"]),
-    "commercial_shop":      dict(geom="polygon",  group="hall", attrs=[],               required=[]),
-    "fire_door":            dict(geom="box",      group="hall", attrs=["class","swing_dir"], required=["class","swing_dir"]),
-    "stair_escalator":      dict(geom="box",      group="hall", attrs=[],               required=[]),
-    "draft_curtain":        dict(geom="box",      group="hall", attrs=[],               required=[]),
+    "fire_clearance_line":  dict(geom="polyline", group="site", attrs=["text_content"], required=[]),
     "evac_distance_line":   dict(geom="polyline", group="hall", attrs=["text_content"], required=[]),
     "width_dimension_line": dict(geom="polyline", group="hall", attrs=["width"],        required=[]),  # width 选填(可走几何)
     "room_title":           dict(geom="box",      group="hall", attrs=["text_content"], required=["text_content"]),
@@ -78,15 +102,23 @@ LABELS = {
 
 # 枚举属性的允许取值
 ENUMS = {
-    "zone_type": {"公共区", "无人区", "有人值守区"},
-    "class":     {"甲级", "乙级"},
-    "swing_dir": {"顺着疏散方向", "逆着疏散方向"},
+    "zone_type":      {"公共区", "无人区", "有人值守区"},
+    "class":          {"甲级", "乙级", "unknown"},
+    "swing_dir":      {"顺着疏散方向", "逆着疏散方向"},
+    "vent_function":  {"新风", "排风", "活塞风", "冷却塔风", "排烟"},
+    "discharge_type": {"侧出", "敞口", "高风亭"},
+    "building_type":  {"多层民用", "高层民用", "超高层民用", "丙类厂房",
+                       "丁戊类厂房", "甲乙类厂房库房", "加油加气加氢站", "其他", "unknown"},
+    "fire_rating":    {"一级", "二级", "三级", "四级", "unknown"},
 }
 
 # 每种图纸"必现"的类（缺了就报错 / 数量过少就警告）
 MANDATORY = {
-    "site": {"surrounding_building": 1, "station_exit_ground": 1, "fire_clearance_line": 1},
-    "hall": {"fire_compartment": 1, "evac_distance_line": 1, "fire_door": 1, "room_title": 1},
+    # 详细版 v3 §9 验收：总平面图必有 周边建筑 + 地面出入口；
+    # 站厅层必有 ≥2 防火分区(含设备区)、安全出口、闸机。
+    # 文字/尺寸类已改为程序直抽，不再作为必现类。
+    "site": {"surrounding_building": 1, "station_exit_ground": 1},
+    "hall": {"fire_compartment": 2, "safety_exit": 1, "gate": 1},
 }
 
 # 数量类规范阈值（仅用于"数量异常"提醒，不替代规则引擎）
