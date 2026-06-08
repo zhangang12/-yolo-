@@ -73,12 +73,16 @@ LABELS = {
     # group 'site' = 总平面图, 'hall' = 站厅层
     # ---- 总平面图：标注团队要标的图形/轮廓 ----
     "station_exit_ground":  dict(geom="polygon",  group="site", attrs=[], required=[]),
+    # 修正：规范 (《标注规则》《标注规范说明_详细版》§6) 未把 vent_function/discharge_type 列为必填，
+    # 属性键仍接受但不强制；强制只会误报。
     "vent_group_ground":    dict(geom="polygon",  group="site",
                                  attrs=["vent_function", "discharge_type", "name", "area_m2"],
-                                 required=["vent_function", "discharge_type"]),
+                                 required=[]),
+    # 修正：《标注规则(1)》"属性字段必填性" 明确要求 周边建筑 的 耐火等级/地上层数/建筑物类型；
+    # 未要求 name（建筑名称）。原 QC 把 name 列为必填、漏列 floors，已纠正。
     "surrounding_building": dict(geom="polygon",  group="site",
                                  attrs=["name", "building_type", "fire_rating", "floors", "height_m"],
-                                 required=["name", "building_type", "fire_rating"]),
+                                 required=["building_type", "fire_rating", "floors"]),
     # ---- 站厅层：标注团队要标的图形/轮廓 ----
     "fire_compartment":     dict(geom="polygon",  group="hall", attrs=["zone_type"], required=["zone_type"]),
     "public_area":          dict(geom="polygon",  group="hall", attrs=[], required=[]),
@@ -114,11 +118,12 @@ ENUMS = {
 
 # 每种图纸"必现"的类（缺了就报错 / 数量过少就警告）
 MANDATORY = {
-    # 详细版 v3 §9 验收：总平面图必有 周边建筑 + 地面出入口；
-    # 站厅层必有 ≥2 防火分区(含设备区)、安全出口、闸机。
-    # 文字/尺寸类已改为程序直抽，不再作为必现类。
-    "site": {"surrounding_building": 1, "station_exit_ground": 1},
-    "hall": {"fire_compartment": 2, "safety_exit": 1, "gate": 1},
+    # 修正：规范《标注规范说明_详细版》§9 验收明确写"总平面图必有 surrounding_building；
+    # 站厅层必有 ≥2 个 fire_compartment(含设备区)、safety_exit、gate"。
+    # station_exit_ground 在规范§4.1 未标 ★必标，DoD 也未强制 → 从必现类移除（仍是受控标签）。
+    # 增补 public_area（§3.2 列为站厅层必标轮廓，团队应画出公共活动区域整体边界）。
+    "site": {"surrounding_building": 1},
+    "hall": {"fire_compartment": 2, "safety_exit": 1, "gate": 1, "public_area": 1},
 }
 
 # 数量类规范阈值（仅用于"数量异常"提醒，不替代规则引擎）
@@ -255,13 +260,14 @@ def qc(path, dtype="auto"):
         rep.dump(); return rep
 
     group = guess_group(imgs) if dtype == "auto" else dtype
-    W = float(imgs[0].get("width") or 0); H = float(imgs[0].get("height") or 0)
     per_label = Counter()
     boxes_by_label = defaultdict(list)
     room_titles = []
     zone_types = []
 
     for im in imgs:
+        # 每张图各自的宽高（修复：原来用 imgs[0] 的 W/H 比较所有图，会误报越界）
+        W = float(im.get("width") or 0); H = float(im.get("height") or 0)
         for el in list(im):
             lab = el.get("label")
             per_label[lab] += 1
@@ -320,10 +326,16 @@ def qc(path, dtype="auto"):
         elif got < need:
             rep.add("WARN", "TOO_FEW", f"[{group}图] {lab} 仅 {got} 个（期望≥{need}）")
 
-    # --- 数量异常 ---
+    # --- 数量异常 ---（修正：规范《站厅层平面图要点》"商铺≤3" 是【单张图】上限，原 QC 错把跨图汇总当上限）
+    shop_per_image = []
+    for im in imgs:
+        n = sum(1 for el in list(im) if el.get("label") == "commercial_shop")
+        if n: shop_per_image.append((im.get("name") or "", n))
+    for nm, n in shop_per_image:
+        if n > COUNT_RULES["commercial_shop_max"]:
+            rep.add("WARN", "SHOP_OVER",
+                    f"[{os.path.basename(nm)}] commercial_shop={n} 超过单张图规范上限{COUNT_RULES['commercial_shop_max']}")
     shop = per_label.get("commercial_shop", 0)
-    if shop > COUNT_RULES["commercial_shop_max"]:
-        rep.add("WARN", "SHOP_OVER", f"commercial_shop={shop} 超过规范上限{COUNT_RULES['commercial_shop_max']}（疑似违规或误标）")
     if shop > 5 and shop == per_label.get("room_title", -1):
         rep.add("WARN", "SHOP_EQ_ROOM", f"commercial_shop 与 room_title 数量相同({shop})，疑似把每个房间都标成了商铺")
 
