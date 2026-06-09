@@ -78,16 +78,20 @@ LABELS = {
     "vent_group_ground":    dict(geom="polygon",  group="site",
                                  attrs=["vent_function", "discharge_type", "name", "area_m2"],
                                  required=[]),
-    # 修正：《标注规则(1)》"属性字段必填性" 明确要求 周边建筑 的 耐火等级/地上层数/建筑物类型；
-    # 未要求 name（建筑名称）。原 QC 把 name 列为必填、漏列 floors，已纠正。
+    # 依据《标注规范说明_详细版》§4.3（新版）属性细则：
+    #   name / building_type / fire_rating = 必填；floors / height_m = 可选。
+    # 说明：有文字层时这些属性由程序从文字层抽取，标注员不用填；无文字层时才人工录入，
+    # 图上无信息一律填 unknown（仅 fire_rating/building_type 有 unknown 枚举值，name 留空）。
+    # QC 这里发 WARN（非 ERROR），便于有/无文字层混编批次不影响交付。
     "surrounding_building": dict(geom="polygon",  group="site",
                                  attrs=["name", "building_type", "fire_rating", "floors", "height_m"],
-                                 required=["building_type", "fire_rating", "floors"]),
+                                 required=["name", "building_type", "fire_rating"]),
     # ---- 站厅层：标注团队要标的图形/轮廓 ----
     "fire_compartment":     dict(geom="polygon",  group="hall", attrs=["zone_type"], required=["zone_type"]),
     "public_area":          dict(geom="polygon",  group="hall", attrs=[], required=[]),
     "commercial_shop":      dict(geom="polygon",  group="hall", attrs=[], required=[]),
-    "safety_exit":          dict(geom="box",      group="hall", attrs=[], required=[]),
+    # safety_exit 加 pair_id（与 evac_distance_line 起终点配对，可选）
+    "safety_exit":          dict(geom="box",      group="hall", attrs=["pair_id"], required=[]),
     "stair_escalator":      dict(geom="box",      group="hall", attrs=[], required=[]),
     "gate":                 dict(geom="box",      group="hall", attrs=[], required=[]),
     "fire_door":            dict(geom="box",      group="hall", attrs=["class", "swing_dir"], required=["class", "swing_dir"]),
@@ -98,7 +102,10 @@ LABELS = {
     "vent_meta":            dict(geom="box",      group="site", attrs=["text_content"], required=["text_content"]),
     "dimension_val":        dict(geom="box",      group="site", attrs=["text_content"], required=["text_content"]),
     "fire_clearance_line":  dict(geom="polyline", group="site", attrs=["text_content"], required=[]),
-    "evac_distance_line":   dict(geom="polyline", group="hall", attrs=["text_content"], required=[]),
+    # evac_distance_line 改方案：沿设计院最远疏散折线人工标，替代 public_area。
+    # text_content 填图纸上标注的距离数字（如 "48.6"），无则留空，程序自动用折线坐标累计长度。
+    # pair_id 与对应 safety_exit 配对，便于程序生成"01 号疏散距离 = X米"报告。
+    "evac_distance_line":   dict(geom="polyline", group="hall", attrs=["text_content", "pair_id"], required=[]),
     "width_dimension_line": dict(geom="polyline", group="hall", attrs=["width"],        required=[]),  # width 选填(可走几何)
     "room_title":           dict(geom="box",      group="hall", attrs=["text_content"], required=["text_content"]),
     "val_text":             dict(geom="box",      group="hall", attrs=["text_content"], required=["text_content"]),
@@ -118,12 +125,13 @@ ENUMS = {
 
 # 每种图纸"必现"的类（缺了就报错 / 数量过少就警告）
 MANDATORY = {
-    # 修正：规范《标注规范说明_详细版》§9 验收明确写"总平面图必有 surrounding_building；
-    # 站厅层必有 ≥2 个 fire_compartment(含设备区)、safety_exit、gate"。
-    # station_exit_ground 在规范§4.1 未标 ★必标，DoD 也未强制 → 从必现类移除（仍是受控标签）。
-    # 增补 public_area（§3.2 列为站厅层必标轮廓，团队应画出公共活动区域整体边界）。
+    # 总平面图：必有 surrounding_building（《详细版》§9 DoD）。
+    # 站厅层：必有 ≥2 fire_compartment(含设备区)、safety_exit、gate（《详细版》§9）。
+    # public_area 由方案调整：人工标 public_area 多边形 + 程序找最远点不可行（程序无法绕墙算路径），
+    # 改为人工沿设计院最远疏散折线标 evac_distance_line，每个公共区分区 ≥1 条 →
+    # 因此 public_area 退出必现类、evac_distance_line 进入必现类(≥1)。
     "site": {"surrounding_building": 1},
-    "hall": {"fire_compartment": 2, "safety_exit": 1, "gate": 1, "public_area": 1},
+    "hall": {"fire_compartment": 2, "safety_exit": 1, "gate": 1, "evac_distance_line": 1},
 }
 
 # 数量类规范阈值（仅用于"数量异常"提醒，不替代规则引擎）
@@ -264,10 +272,14 @@ def qc(path, dtype="auto"):
     boxes_by_label = defaultdict(list)
     room_titles = []
     zone_types = []
+    # 疏散方案：按图收集 evac_distance_line / safety_exit 的 pair_id 与折线长度，做配对一致性检查
+    evac_per_image = defaultdict(list)   # img_name -> list of (pair_id, text_content, pts)
+    safety_per_image = defaultdict(list) # img_name -> list of pair_id
 
     for im in imgs:
         # 每张图各自的宽高（修复：原来用 imgs[0] 的 W/H 比较所有图，会误报越界）
         W = float(im.get("width") or 0); H = float(im.get("height") or 0)
+        img_name = im.get("name") or ""
         for el in list(im):
             lab = el.get("label")
             per_label[lab] += 1
@@ -317,6 +329,16 @@ def qc(path, dtype="auto"):
                 room_titles.append(present.get("text_content", ""))
             if lab == "fire_compartment":
                 zone_types.append(present.get("zone_type", ""))
+            if lab == "evac_distance_line":
+                evac_per_image[img_name].append((
+                    present.get("pair_id", ""),
+                    present.get("text_content", ""),
+                    pts if pts else []
+                ))
+            if lab == "safety_exit":
+                pid = present.get("pair_id", "")
+                if pid:
+                    safety_per_image[img_name].append(pid)
 
     # --- 必现类缺失 ---
     for lab, need in MANDATORY.get(group, {}).items():
@@ -338,6 +360,48 @@ def qc(path, dtype="auto"):
     shop = per_label.get("commercial_shop", 0)
     if shop > 5 and shop == per_label.get("room_title", -1):
         rep.add("WARN", "SHOP_EQ_ROOM", f"commercial_shop 与 room_title 数量相同({shop})，疑似把每个房间都标成了商铺")
+
+    # --- 站厅层：疏散方案 per-image 检查 ---
+    if group == "hall":
+        for im in imgs:
+            nm = im.get("name") or ""
+            base_nm = os.path.basename(nm)
+            evac_list = evac_per_image.get(nm, [])
+            if not evac_list:
+                rep.add("ERROR", "NO_EVAC_LINE",
+                        f"[{base_nm}] 没有 evac_distance_line（每张站厅图至少 1 条最远疏散折线）")
+                continue
+            # pair_id 重复检查
+            pids = [p for p, _, _ in evac_list if p]
+            dup = [k for k, v in Counter(pids).items() if v > 1]
+            if dup:
+                rep.add("WARN", "DUP_PAIR_ID",
+                        f"[{base_nm}] evac_distance_line 的 pair_id 重复：{sorted(set(dup))}")
+            # pair_id ↔ safety_exit 配对
+            sx_pids = set(safety_per_image.get(nm, []))
+            for p, _, _ in evac_list:
+                if p and sx_pids and p not in sx_pids:
+                    rep.add("INFO", "NO_EXIT_PAIR",
+                            f"[{base_nm}] evac_distance_line pair_id={p!r} 找不到匹配的 safety_exit.pair_id")
+            # text_content 数值合理性（≤100m 区间，>100 像 m 单位写错或 cm）
+            for p, tc, _ in evac_list:
+                if tc:
+                    try:
+                        v = float(re.sub(r"[^\d.]", "", tc) or "0")
+                        if v <= 0 or v > 100:
+                            rep.add("WARN", "EVAC_TEXT_RANGE",
+                                    f"[{base_nm}] evac_distance_line text_content={tc!r} 数值不合理（应为米，0–100）")
+                    except ValueError:
+                        rep.add("WARN", "EVAC_TEXT_NONNUM",
+                                f"[{base_nm}] evac_distance_line text_content={tc!r} 不是数字（应填距离米数，如 48.6）")
+            # 折线退化检查（点数 < 2 不可能是折线；点数 = 2 是直线，允许但提示）
+            for p, _, pts in evac_list:
+                if len(pts) < 2:
+                    rep.add("ERROR", "EVAC_TOO_SHORT",
+                            f"[{base_nm}] evac_distance_line 点数 <2，无法构成折线")
+                elif len(pts) == 2:
+                    rep.add("INFO", "EVAC_STRAIGHT",
+                            f"[{base_nm}] evac_distance_line 只有 2 个点（直线）—— 请确认是否需要沿走道加拐点")
 
     # --- 设备区分区缺失（站厅层）---
     if group == "hall":
