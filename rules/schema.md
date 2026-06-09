@@ -28,7 +28,7 @@
 
 | target | 含义 | 必备字段 |
 |---|---|---|
-| `fire_compartment` | 防火分区 | `id`, `area_m2`, `zone_type`(`public`/`equipment_unmanned`/`equipment_staffed`/`platform`), `is_shared_concourse`, `exits`(数组), `effective_exits`(派生) |
+| `fire_compartment` | 防火分区 | `id`, `area_m2`, `area_m2_design`(设计院声称面积), `zone_type`(`public`/`equipment_unmanned`/`equipment_staffed`/`platform`), `is_shared_concourse`, `exits`(数组), `effective_exits`(派生) |
 | `evac_distance_line` | 疏散距离线 | `id`, `length_m`, `kind`(`any_to_exit`/`door_to_exit_between`/`door_to_exit_deadend`) |
 | `exit` | 安全出口 | `id`, `leads_to`(`ground`/`other`), `direction_group`, `zone`(`public`/`equipment_unmanned`/`equipment_staffed`/`platform`) |
 | `exit_pair` | 出口两两组合（由上游准备） | `id`, `exit_a`, `exit_b`, `relation`(`same_direction`/`adjacent`), `distance_m` |
@@ -50,7 +50,7 @@
 | `surrounding_building` polygon + `name` / `building_type` / `fire_rating` / `floors` / `height_m` 属性 | `building_clearance`（每条防火间距一条） | `building_name ← name`；`building_category ← building_type`；`distance_m` 由几何就近计算；每栋建筑可能对站点出入口/风亭分别派生多条 |
 | `vent_group_ground` polygon + `vent_function` / `discharge_type` / `name` / `area_m2` 属性 | `vent_pair`（两两风亭组合，仅当一方=新风、另一方=排风/活塞风时生成） | `kind ← "fresh_vs_exhaust_or_piston"`（基于 vent_function 配对）；`distance_m` 由几何最近距离计算；`is_exhaust_higher ← discharge_type` 推断（排风/活塞=`高风亭` 且新风=`侧出/敞口` → `true`；同高度 → `false`；信息不足 → `null` 触发 review） |
 | `fire_door` box + `class` / `swing_dir` 属性 | `door` | `class` 直接透传；`swing_direction ← swing_dir`（"顺着疏散方向"→`evacuation`，"逆着疏散方向"→`reverse`）；`clear_width_m` 由洞口宽 − 0.15 算出（洞口宽来自就近尺寸数字）；`is_on_firewall` 由几何派生：fire_door 中心点是否落在 `fire_compartment` 多边形边界或 `fire_shutter` 上；`is_always_open` 当前无源标注，需项目方在配置补 |
-| `fire_compartment` polygon + `zone_type` 属性 | `fire_compartment` | `area_m2` 由几何面积 + 比例尺算出；`zone_type` 透传（公共区→`public`，**无人区→`equipment_unmanned`**，**有人值守区→`equipment_staffed`**）；`exits ←` 落在该多边形边界附近（< 2m）的 `safety_exit` 集合；`effective_exits ← exits ∪` 邻接分区共用防火墙上的"常开甲级防火门"（per GB 50157 § 28.2.3-3 注） |
+| `fire_compartment` polygon + `zone_type` + `area_m2_design` 属性 | `fire_compartment` | `area_m2` 由几何面积 + 比例尺算出；`area_m2_design` 优先级最高：① 有文字层 → 程序从文字层抽（如"防火分区一 4967.59㎡"），写回属性；② 无文字层 → 标注员从示意图/原图上抄录数字；③ 完全没有数字 → 留空，规则引擎触发 review_required。**面积合规规则用 `area_m2_design` 而非几何面积**（卫生间/泵房等不计入面积的房间纳入多边形不会污染判定）。`zone_type` 透传（公共区→`public`，**无人区→`equipment_unmanned`**，**有人值守区→`equipment_staffed`**）；`exits ←` 落在该多边形边界附近（< 2m）的 `safety_exit` 集合；`effective_exits ← exits ∪` 邻接分区共用防火墙上的"常开甲级防火门"（per GB 50157 § 28.2.3-3 注） |
 | `evac_distance_line` polyline + `text_content` / `pair_id` 属性 | `evac_distance_line` | `length_m` ← 折线像素累计长度 × 图纸比例尺；`kind` 派生：终点最近的实体 = `safety_exit` → `any_to_exit`；终点是房间门 + 位置 = `between_exits` → `door_to_exit_between`；终点是房间门 + `dead_end` → `door_to_exit_deadend` |
 | `safety_exit` box + `pair_id` 属性 | `exit` | `leads_to`：终点在地面图（站点出入口所在层）则 `ground`，否则 `other`；`zone` ← 该 safety_exit 所在 `fire_compartment.zone_type`；`direction_group` 用方位角聚类（同 ±15° 方向算一组） |
 

@@ -198,6 +198,15 @@
           "有人值守区"
         ],
         "default_value": "公共区"
+      },
+      {
+        "name": "area_m2_design",
+        "input_type": "text",
+        "mutable": false,
+        "values": [
+          ""
+        ],
+        "default_value": ""
       }
     ]
   },

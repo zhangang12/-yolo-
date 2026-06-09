@@ -66,6 +66,8 @@ MAPPING = {
     "风亭功能": "vent_function", "通风功能": "vent_function", "风口功能": "vent_function",
     "出风方式": "discharge_type", "排放方式": "discharge_type", "出风形式": "discharge_type",
     "面积": "area_m2", "风口面积": "area_m2",
+    # fire_compartment 设计院声称面积（无文字层 + 主图无数字时由标注员从示意图抄录）
+    "设计面积": "area_m2_design", "声称面积": "area_m2_design", "分区面积": "area_m2_design",
 }
 
 # 每个英文标签的：几何类型 / 所属图纸 / 允许的属性 / 必填属性
@@ -87,7 +89,14 @@ LABELS = {
                                  attrs=["name", "building_type", "fire_rating", "floors", "height_m"],
                                  required=["name", "building_type", "fire_rating"]),
     # ---- 站厅层：标注团队要标的图形/轮廓 ----
-    "fire_compartment":     dict(geom="polygon",  group="hall", attrs=["zone_type"], required=["zone_type"]),
+    # area_m2_design = 设计院声称的分区面积（米²，数字）。两种填法：
+    #   ① 有文字层 → 程序从文字层抽，写回此字段，标注员不用填
+    #   ② 无文字层 + 主图/示意图上有面积数字 → 标注员从图上抄录（如 4967.59）
+    #   ③ 无文字层 + 图上完全没标 → 留空（规则引擎会触发 review_required）
+    # 该字段优先级 > 几何派生面积；规则引擎用此字段做 ≤5000㎡/≤1500㎡ 等合规判定。
+    "fire_compartment":     dict(geom="polygon",  group="hall",
+                                 attrs=["zone_type", "area_m2_design"],
+                                 required=["zone_type"]),
     "public_area":          dict(geom="polygon",  group="hall", attrs=[], required=[]),
     "commercial_shop":      dict(geom="polygon",  group="hall", attrs=[], required=[]),
     # safety_exit 加 pair_id（与 evac_distance_line 起终点配对，可选）
@@ -144,20 +153,40 @@ EQUIP_ROOM_KW = ["机房", "泵房", "配电", "控制室", "通信", "信号", 
                  "变电", "电缆", "风室", "管理", "票务", "站长", "备品", "工具",
                  "卫生间", "厕所"]
 
+# ORPHAN 距离分级阈值（像素）：
+# val_text / room_title 距离最近 fire_compartment 多边形的距离：
+#   ≤ NEAR(=0 即在多边形内)            → ✅ 静默通过
+#   0 < dist ≤ NEAR_THRESHOLD          → ✅ 静默通过（示意图风格：标题在轮廓上方）
+#                                          + 房间在分区边界附近(规范§5"不计面积≠独立成区")
+#   NEAR_THRESHOLD < dist ≤ FAR_THRESHOLD → 🔵 INFO（提示性，可能正常也可能漏归属）
+#   dist > FAR_THRESHOLD                → 🟠 WARN（大概率框到角落小图/标题栏/示意图上）
+ORPHAN_NEAR_THRESHOLD = 300  # ≤300px 视为在分区附近(含示意图风格"标题在轮廓上方"的常见 186-229px 偏移)
+ORPHAN_FAR_THRESHOLD  = 500  # 300-500px 提示性，>500 才报警
+
 # ORPHAN 类问题的处理指引（QC 报告末尾汇总打印一次，避免每条都重复）
 ORPHAN_GUIDANCE = {
     "VAL_TEXT_ORPHAN": (
-        "val_text 中心点应该落在它描述的 fire_compartment 多边形内部，"
-        "否则程序无法判断它对应哪个分区。常见原因：\n"
-        "      ①框在了图角的「防火分区示意图」小图上 → 移到主图分区内\n"
-        "      ②框在了标题栏/图例区域 → 移到主图分区内\n"
-        "      ③该分区轮廓没包住这块文字 → 扩大多边形或挪文字位置"
+        f"val_text 距最近 fire_compartment >{ORPHAN_FAR_THRESHOLD}px，大概率框错位置。常见原因：\n"
+        "      ①框在了图角的「防火分区示意图」小图上 → 移到主图实际分区位置\n"
+        "      ②框在了标题栏/图例区域 → 移到主图分区位置\n"
+        "      ③主图本身没有面积数字、只有示意图有 → 直接删 val_text，改在 fire_compartment\n"
+        "         多边形的 area_m2_design 属性里填面积（从示意图抄录）"
+    ),
+    "VAL_TEXT_NEAR_ORPHAN": (
+        f"val_text 距最近 fire_compartment 在 {ORPHAN_NEAR_THRESHOLD}-{ORPHAN_FAR_THRESHOLD}px 之间，"
+        "提示性检查。请人工核实是否归属正确分区。"
     ),
     "ROOM_TITLE_ORPHAN": (
-        "room_title 中心点应该落在它所属的 fire_compartment 多边形内部。\n"
-        "      规范《详细版》§5 原文：「泵房/厕所『不计入面积』≠『独立成区』，仍属于相邻的某个分区」。\n"
-        "      处理：把 fire_compartment 多边形稍微扩大，把该房间包进相邻分区（推荐）；\n"
-        "          或确认轮廓已准确时挪 room_title 框到分区内。"
+        f"room_title 距最近 fire_compartment >{ORPHAN_FAR_THRESHOLD}px，大概率位置错。\n"
+        "      可能原因：①框在了示意图小图或标题栏 → 移到主图位置\n"
+        "                ②房间确实在站厅层结构外（如出入口附属建筑）→ 不该标 room_title，请删除"
+    ),
+    "ROOM_TITLE_NEAR_ORPHAN": (
+        f"room_title 距最近 fire_compartment 在 {ORPHAN_NEAR_THRESHOLD}-{ORPHAN_FAR_THRESHOLD}px 之间，"
+        "提示性检查。常见情况：\n"
+        "      ①示意图风格：标题印在分区轮廓上方 → 正常，无需修改\n"
+        "      ②规范《详细版》§5：「泵房/厕所『不计面积』≠『独立成区』」→ 该房间属于相邻分区，正常\n"
+        "      ③确实定位错 → 请人工核实"
     ),
     "WIDTH_LINE_ORPHAN": (
         "width_dimension_line 两端 80px 内应有 fire_door/stair_escalator/gate（它在标这些实体的宽度）。\n"
@@ -529,28 +558,47 @@ def qc(path, dtype="auto"):
         # 总平面 dimension_val 邻接目标
         site_lines = [pts for pts, _ in g.get("fire_clearance_line", []) if pts]
 
-        # ① val_text 中心点必须落在某个 fire_compartment polygon 内
+        # ① val_text 距最近 fire_compartment 多边形的距离分级判断
+        # ≤300px 视为正常（含示意图风格"标题在轮廓上方 186-229px"的情况）
+        # 300-500px → INFO（提示性，可能正常）
+        # >500px → WARN（大概率框到角落小图）
         for pts, tc in g.get("val_text", []):
             b = _to_box(pts)
             if not b or not fc_polys: continue
             cx, cy = _box_center(b)
-            if not any(_point_in_poly(cx, cy, poly) for poly in fc_polys):
-                dist = min(_min_dist_point_to_poly((cx, cy), p) for p in fc_polys)
-                tc_show = (tc or "<空>")[:30]
+            if any(_point_in_poly(cx, cy, poly) for poly in fc_polys):
+                continue  # 在多边形内，直接通过
+            dist = min(_min_dist_point_to_poly((cx, cy), p) for p in fc_polys)
+            if dist <= ORPHAN_NEAR_THRESHOLD:
+                continue  # 在阈值内，视为正常（示意图标题在轮廓上方）
+            tc_show = (tc or "<空>")[:30]
+            if dist <= ORPHAN_FAR_THRESHOLD:
+                rep.add("INFO", "VAL_TEXT_NEAR_ORPHAN",
+                        f"[{base_nm}] val_text 'text_content={tc_show}' 中心 ({cx:.0f},{cy:.0f}) 距最近 fire_compartment {dist:.0f}px — 请人工核实归属（{ORPHAN_NEAR_THRESHOLD}-{ORPHAN_FAR_THRESHOLD}px 提示带）")
+                orphan_codes_seen.add("VAL_TEXT_NEAR_ORPHAN")
+            else:
                 rep.add("WARN", "VAL_TEXT_ORPHAN",
-                        f"[{base_nm}] val_text 'text_content={tc_show}' 中心 ({cx:.0f},{cy:.0f}) 距最近 fire_compartment {dist:.0f}px — 请核实归属")
+                        f"[{base_nm}] val_text 'text_content={tc_show}' 中心 ({cx:.0f},{cy:.0f}) 距最近 fire_compartment {dist:.0f}px (>{ORPHAN_FAR_THRESHOLD}px) — 大概率位置错")
                 orphan_codes_seen.add("VAL_TEXT_ORPHAN")
 
-        # ② room_title 中心点必须落在某个 fire_compartment polygon 内
+        # ② room_title 同上的距离分级
         for pts, tc in g.get("room_title", []):
             b = _to_box(pts)
             if not b or not fc_polys: continue
             cx, cy = _box_center(b)
-            if not any(_point_in_poly(cx, cy, poly) for poly in fc_polys):
-                dist = min(_min_dist_point_to_poly((cx, cy), p) for p in fc_polys)
-                tc_show = (tc or "<空>")[:20]
+            if any(_point_in_poly(cx, cy, poly) for poly in fc_polys):
+                continue
+            dist = min(_min_dist_point_to_poly((cx, cy), p) for p in fc_polys)
+            if dist <= ORPHAN_NEAR_THRESHOLD:
+                continue  # 在阈值内，视为正常（规范§5"不计面积≠独立成区"+示意图风格）
+            tc_show = (tc or "<空>")[:20]
+            if dist <= ORPHAN_FAR_THRESHOLD:
+                rep.add("INFO", "ROOM_TITLE_NEAR_ORPHAN",
+                        f"[{base_nm}] room_title '{tc_show}' 中心 ({cx:.0f},{cy:.0f}) 距最近 fire_compartment {dist:.0f}px — 请人工核实归属（{ORPHAN_NEAR_THRESHOLD}-{ORPHAN_FAR_THRESHOLD}px 提示带）")
+                orphan_codes_seen.add("ROOM_TITLE_NEAR_ORPHAN")
+            else:
                 rep.add("WARN", "ROOM_TITLE_ORPHAN",
-                        f"[{base_nm}] room_title '{tc_show}' 中心 ({cx:.0f},{cy:.0f}) 距最近 fire_compartment {dist:.0f}px — 请核实归属")
+                        f"[{base_nm}] room_title '{tc_show}' 中心 ({cx:.0f},{cy:.0f}) 距最近 fire_compartment {dist:.0f}px (>{ORPHAN_FAR_THRESHOLD}px) — 大概率位置错")
                 orphan_codes_seen.add("ROOM_TITLE_ORPHAN")
 
         # ③ width_dimension_line 两端点都应有就近实体（fire_door/stair/gate），<80px
