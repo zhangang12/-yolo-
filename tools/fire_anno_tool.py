@@ -144,6 +144,31 @@ EQUIP_ROOM_KW = ["机房", "泵房", "配电", "控制室", "通信", "信号", 
                  "变电", "电缆", "风室", "管理", "票务", "站长", "备品", "工具",
                  "卫生间", "厕所"]
 
+# ORPHAN 类问题的处理指引（QC 报告末尾汇总打印一次，避免每条都重复）
+ORPHAN_GUIDANCE = {
+    "VAL_TEXT_ORPHAN": (
+        "val_text 中心点应该落在它描述的 fire_compartment 多边形内部，"
+        "否则程序无法判断它对应哪个分区。常见原因：\n"
+        "      ①框在了图角的「防火分区示意图」小图上 → 移到主图分区内\n"
+        "      ②框在了标题栏/图例区域 → 移到主图分区内\n"
+        "      ③该分区轮廓没包住这块文字 → 扩大多边形或挪文字位置"
+    ),
+    "ROOM_TITLE_ORPHAN": (
+        "room_title 中心点应该落在它所属的 fire_compartment 多边形内部。\n"
+        "      规范《详细版》§5 原文：「泵房/厕所『不计入面积』≠『独立成区』，仍属于相邻的某个分区」。\n"
+        "      处理：把 fire_compartment 多边形稍微扩大，把该房间包进相邻分区（推荐）；\n"
+        "          或确认轮廓已准确时挪 room_title 框到分区内。"
+    ),
+    "WIDTH_LINE_ORPHAN": (
+        "width_dimension_line 两端 80px 内应有 fire_door/stair_escalator/gate（它在标这些实体的宽度）。\n"
+        "      处理：找到这条尺寸线在标谁的宽度，修正端点位置贴到对应实体上；或如果是误标就删掉。"
+    ),
+    "DIM_VAL_ORPHAN": (
+        "dimension_val 框 150px 内应有 fire_clearance_line（它在标某条防火间距的数值）。\n"
+        "      处理：调整 dimension_val 框的位置使其紧邻对应的防火间距线。"
+    ),
+}
+
 # QC 报 BAD_LABEL 时给出的拆解指引（标注公司可能误以为"删了就过"，要明确告知"按内容拆"）
 LABEL_GUIDANCE = {
     "注释": (
@@ -375,8 +400,9 @@ def qc(path, dtype="auto"):
     safety_per_image = defaultdict(list) # img_name -> list of pair_id
     # 必填属性按"图×标签×属性"分桶聚合（替代原 per-shape WARN，区分 全空/部分填/全填）
     req_fill = defaultdict(lambda: [0, 0])  # (img_name, label, attr_key) -> [total, filled]
-    # P2 几何关系派生检查：按图收集各类对象，循环结束后做"邻接/包含"完整性校验
-    geom_per_image = defaultdict(lambda: defaultdict(list))  # img -> label -> list of (pts, box_or_poly)
+    # P2 几何关系派生检查：按图收集各类对象（含 text_content 用于报错时定位）
+    # img -> label -> list of (pts, text_content)
+    geom_per_image = defaultdict(lambda: defaultdict(list))
 
     for im in imgs:
         # 每张图各自的宽高（修复：原来用 imgs[0] 的 W/H 比较所有图，会误报越界）
@@ -451,11 +477,12 @@ def qc(path, dtype="auto"):
                     for p in re.split(r"[,，;；\s]+", pid):
                         p = p.strip()
                         if p: safety_per_image[img_name].append(p)
-            # P2 几何关系派生：按图收集，循环结束后做 ORPHAN 检查
+            # P2 几何关系派生：按图收集，循环结束后做 ORPHAN 检查（含 text 用于定位）
             if lab in ("val_text", "room_title", "fire_compartment", "fire_door",
                        "stair_escalator", "gate", "width_dimension_line",
                        "dimension_val", "fire_clearance_line"):
-                geom_per_image[img_name][lab].append(pts if pts else [])
+                tc = present.get("text_content", "")
+                geom_per_image[img_name][lab].append((pts if pts else [], tc))
 
     # --- 必填属性按"图×标签×属性"分级 ---
     # 该图同标签同属性全部留空 → 推断"有文字层、程序代填"，发 INFO 提示
@@ -471,16 +498,23 @@ def qc(path, dtype="auto"):
                     f"[{base_nm}] {lab}.{req} 仅填了 {filled}/{total}（部分填部分空），请核实是否有漏填")
 
     # --- P2 几何关系派生 ORPHAN 检查 ---
-    # 阈值（像素）：在 1024² 以上的高清底图上的经验值，可按 image W/H 自适应
+    # 阈值（像素）：在 1024² 以上的高清底图上的经验值
     ORPHAN_NEAR_PX = 80     # 尺寸线/数值与对应实体的就近阈值
     ORPHAN_NEAR_PX_FAR = 150
+    orphan_codes_seen = set()  # 收集触发过的 ORPHAN 类型，末尾统一打印指引
+
+    def _min_dist_point_to_poly(p, poly):
+        """点到 polygon 顶点的最小距离（近似）"""
+        px, py = p
+        return min(((px - x) ** 2 + (py - y) ** 2) ** 0.5 for x, y in poly)
+
     for im in imgs:
         nm = im.get("name") or ""
         base_nm = os.path.basename(nm)
         g = geom_per_image.get(nm, {})
         if not g: continue
         # 取出 fire_compartment 多边形（用于"中心点在分区内"判定）
-        fc_polys = [shape for shape in g.get("fire_compartment", []) if shape and len(shape) >= 3]
+        fc_polys = [shape for shape, _ in g.get("fire_compartment", []) if shape and len(shape) >= 3]
         # box 简化为左上右下两点
         def _to_box(pts):
             if not pts: return None
@@ -489,50 +523,59 @@ def qc(path, dtype="auto"):
         # 邻接对象（站厅层 width_dimension_line 端点要找的目标）
         hall_anchors = []
         for k in ("fire_door", "stair_escalator", "gate"):
-            for pts in g.get(k, []):
+            for pts, _ in g.get(k, []):
                 b = _to_box(pts)
                 if b: hall_anchors.append(b)
         # 总平面 dimension_val 邻接目标
-        site_lines = [pts for pts in g.get("fire_clearance_line", []) if pts]
+        site_lines = [pts for pts, _ in g.get("fire_clearance_line", []) if pts]
 
         # ① val_text 中心点必须落在某个 fire_compartment polygon 内
-        for pts in g.get("val_text", []):
+        for pts, tc in g.get("val_text", []):
             b = _to_box(pts)
             if not b or not fc_polys: continue
             cx, cy = _box_center(b)
             if not any(_point_in_poly(cx, cy, poly) for poly in fc_polys):
+                dist = min(_min_dist_point_to_poly((cx, cy), p) for p in fc_polys)
+                tc_show = (tc or "<空>")[:30]
                 rep.add("WARN", "VAL_TEXT_ORPHAN",
-                        f"[{base_nm}] val_text 框 ({cx:.0f},{cy:.0f}) 不在任何 fire_compartment 多边形内 — 请核实归属")
+                        f"[{base_nm}] val_text 'text_content={tc_show}' 中心 ({cx:.0f},{cy:.0f}) 距最近 fire_compartment {dist:.0f}px — 请核实归属")
+                orphan_codes_seen.add("VAL_TEXT_ORPHAN")
 
         # ② room_title 中心点必须落在某个 fire_compartment polygon 内
-        for pts in g.get("room_title", []):
+        for pts, tc in g.get("room_title", []):
             b = _to_box(pts)
             if not b or not fc_polys: continue
             cx, cy = _box_center(b)
             if not any(_point_in_poly(cx, cy, poly) for poly in fc_polys):
+                dist = min(_min_dist_point_to_poly((cx, cy), p) for p in fc_polys)
+                tc_show = (tc or "<空>")[:20]
                 rep.add("WARN", "ROOM_TITLE_ORPHAN",
-                        f"[{base_nm}] room_title 框 ({cx:.0f},{cy:.0f}) 不在任何 fire_compartment 多边形内 — 请核实归属")
+                        f"[{base_nm}] room_title '{tc_show}' 中心 ({cx:.0f},{cy:.0f}) 距最近 fire_compartment {dist:.0f}px — 请核实归属")
+                orphan_codes_seen.add("ROOM_TITLE_ORPHAN")
 
         # ③ width_dimension_line 两端点都应有就近实体（fire_door/stair/gate），<80px
         if hall_anchors:
-            for pts in g.get("width_dimension_line", []):
+            for pts, _ in g.get("width_dimension_line", []):
                 if not pts or len(pts) < 2: continue
                 ep = [pts[0], pts[-1]]   # 取折线两个端点
                 orphan_ends = sum(1 for p in ep
                                   if _min_dist_point_to_boxes(p, hall_anchors) > ORPHAN_NEAR_PX)
                 if orphan_ends == 2:
                     rep.add("WARN", "WIDTH_LINE_ORPHAN",
-                            f"[{base_nm}] width_dimension_line 两端 >{ORPHAN_NEAR_PX}px 内都没有 fire_door/stair_escalator/gate — 请核实关联实体")
+                            f"[{base_nm}] width_dimension_line 两端 ({pts[0][0]:.0f},{pts[0][1]:.0f})-({pts[-1][0]:.0f},{pts[-1][1]:.0f}) >{ORPHAN_NEAR_PX}px 内都没有 fire_door/stair_escalator/gate — 请核实关联实体")
+                    orphan_codes_seen.add("WIDTH_LINE_ORPHAN")
 
         # ④ dimension_val 框中心 <150px 内应有 fire_clearance_line（总平面）
         if site_lines and g.get("dimension_val"):
-            for pts in g.get("dimension_val", []):
+            for pts, tc in g.get("dimension_val", []):
                 b = _to_box(pts)
                 if not b: continue
                 cx, cy = _box_center(b)
                 if _min_dist_point_to_polylines((cx, cy), site_lines) > ORPHAN_NEAR_PX_FAR:
+                    tc_show = (tc or "<空>")[:20]
                     rep.add("WARN", "DIM_VAL_ORPHAN",
-                            f"[{base_nm}] dimension_val ({cx:.0f},{cy:.0f}) {ORPHAN_NEAR_PX_FAR}px 内没有 fire_clearance_line — 请核实归属")
+                            f"[{base_nm}] dimension_val '{tc_show}' ({cx:.0f},{cy:.0f}) {ORPHAN_NEAR_PX_FAR}px 内没有 fire_clearance_line — 请核实归属")
+                    orphan_codes_seen.add("DIM_VAL_ORPHAN")
 
     # --- 必现类缺失 ---
     for lab, need in MANDATORY.get(group, {}).items():
@@ -619,6 +662,12 @@ def qc(path, dtype="auto"):
     c = rep.counts()
     print(f"  结果: 🔴ERROR {c.get('ERROR',0)}  🟠WARN {c.get('WARN',0)}  🔵INFO {c.get('INFO',0)}")
     rep.dump()
+    # ORPHAN 类指引（汇总打印一次，避免每条 ORPHAN 都重复一遍）
+    if orphan_codes_seen:
+        print("\n  ──── ORPHAN 问题处理指引 ────")
+        for code in sorted(orphan_codes_seen):
+            print(f"  💡 {code}:")
+            print(f"      {ORPHAN_GUIDANCE.get(code, '请人工核实归属')}")
     verdict = "❌ 不通过(有ERROR)" if c.get("ERROR") else ("⚠️  可用但需修正(有WARN)" if c.get("WARN") else "✅ 通过")
     print("  验收:", verdict)
     return rep
