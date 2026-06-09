@@ -1,0 +1,366 @@
+[
+  {
+    "name": "station_exit_ground",
+    "color": "#2E86DE",
+    "type": "polygon",
+    "attributes": []
+  },
+  {
+    "name": "vent_group_ground",
+    "color": "#10AC84",
+    "type": "polygon",
+    "attributes": [
+      {
+        "name": "vent_function",
+        "input_type": "select",
+        "mutable": false,
+        "values": [
+          "冷却塔风",
+          "排烟",
+          "排风",
+          "新风",
+          "活塞风"
+        ],
+        "default_value": "冷却塔风"
+      },
+      {
+        "name": "discharge_type",
+        "input_type": "radio",
+        "mutable": false,
+        "values": [
+          "unknown",
+          "侧出",
+          "敞口",
+          "高风亭"
+        ],
+        "default_value": "unknown"
+      },
+      {
+        "name": "name",
+        "input_type": "text",
+        "mutable": true,
+        "values": [
+          ""
+        ],
+        "default_value": ""
+      },
+      {
+        "name": "area_m2",
+        "input_type": "number",
+        "mutable": true,
+        "values": [
+          "0;100000;0.01"
+        ],
+        "default_value": "0"
+      }
+    ]
+  },
+  {
+    "name": "surrounding_building",
+    "color": "#8E44AD",
+    "type": "polygon",
+    "attributes": [
+      {
+        "name": "name",
+        "input_type": "text",
+        "mutable": true,
+        "values": [
+          ""
+        ],
+        "default_value": ""
+      },
+      {
+        "name": "building_type",
+        "input_type": "select",
+        "mutable": false,
+        "values": [
+          "unknown",
+          "丁戊类厂房",
+          "丙类厂房",
+          "其他",
+          "加油加气加氢站",
+          "多层民用",
+          "甲乙类厂房库房",
+          "超高层民用",
+          "高层民用"
+        ],
+        "default_value": "unknown"
+      },
+      {
+        "name": "fire_rating",
+        "input_type": "select",
+        "mutable": false,
+        "values": [
+          "unknown",
+          "一级",
+          "三级",
+          "二级",
+          "四级"
+        ],
+        "default_value": "unknown"
+      },
+      {
+        "name": "floors",
+        "input_type": "number",
+        "mutable": true,
+        "values": [
+          "0;100;1"
+        ],
+        "default_value": "0"
+      },
+      {
+        "name": "height_m",
+        "input_type": "number",
+        "mutable": true,
+        "values": [
+          "0;300;0.1"
+        ],
+        "default_value": "0"
+      }
+    ]
+  },
+  {
+    "name": "building_meta",
+    "color": "#5F6A6A",
+    "type": "rectangle",
+    "attributes": [
+      {
+        "name": "text_content",
+        "input_type": "text",
+        "mutable": true,
+        "values": [
+          ""
+        ],
+        "default_value": ""
+      }
+    ]
+  },
+  {
+    "name": "vent_meta",
+    "color": "#1ABC9C",
+    "type": "rectangle",
+    "attributes": [
+      {
+        "name": "text_content",
+        "input_type": "text",
+        "mutable": true,
+        "values": [
+          ""
+        ],
+        "default_value": ""
+      }
+    ]
+  },
+  {
+    "name": "dimension_val",
+    "color": "#E67E22",
+    "type": "rectangle",
+    "attributes": [
+      {
+        "name": "text_content",
+        "input_type": "text",
+        "mutable": true,
+        "values": [
+          ""
+        ],
+        "default_value": ""
+      }
+    ]
+  },
+  {
+    "name": "fire_clearance_line",
+    "color": "#E74C3C",
+    "type": "polyline",
+    "attributes": [
+      {
+        "name": "text_content",
+        "input_type": "text",
+        "mutable": true,
+        "values": [
+          ""
+        ],
+        "default_value": ""
+      }
+    ]
+  },
+  {
+    "name": "fire_compartment",
+    "color": "#FF6B6B",
+    "type": "polygon",
+    "attributes": [
+      {
+        "name": "zone_type",
+        "input_type": "radio",
+        "mutable": false,
+        "values": [
+          "公共区",
+          "无人区",
+          "有人值守区"
+        ],
+        "default_value": "公共区"
+      }
+    ]
+  },
+  {
+    "name": "public_area",
+    "color": "#48CAE4",
+    "type": "polygon",
+    "attributes": []
+  },
+  {
+    "name": "commercial_shop",
+    "color": "#F39C12",
+    "type": "polygon",
+    "attributes": []
+  },
+  {
+    "name": "safety_exit",
+    "color": "#00B894",
+    "type": "rectangle",
+    "attributes": [
+      {
+        "name": "pair_id",
+        "input_type": "text",
+        "mutable": true,
+        "values": [
+          ""
+        ],
+        "default_value": ""
+      }
+    ]
+  },
+  {
+    "name": "stair_escalator",
+    "color": "#6C5CE7",
+    "type": "rectangle",
+    "attributes": []
+  },
+  {
+    "name": "gate",
+    "color": "#FDCB6E",
+    "type": "rectangle",
+    "attributes": []
+  },
+  {
+    "name": "fire_door",
+    "color": "#D63031",
+    "type": "rectangle",
+    "attributes": [
+      {
+        "name": "class",
+        "input_type": "radio",
+        "mutable": false,
+        "values": [
+          "unknown",
+          "乙级",
+          "甲级"
+        ],
+        "default_value": "unknown"
+      },
+      {
+        "name": "swing_dir",
+        "input_type": "radio",
+        "mutable": false,
+        "values": [
+          "逆着疏散方向",
+          "顺着疏散方向"
+        ],
+        "default_value": "逆着疏散方向"
+      },
+      {
+        "name": "text_content",
+        "input_type": "text",
+        "mutable": true,
+        "values": [
+          ""
+        ],
+        "default_value": ""
+      }
+    ]
+  },
+  {
+    "name": "fire_shutter",
+    "color": "#A29BFE",
+    "type": "rectangle",
+    "attributes": []
+  },
+  {
+    "name": "draft_curtain",
+    "color": "#74B9FF",
+    "type": "rectangle",
+    "attributes": []
+  },
+  {
+    "name": "evac_distance_line",
+    "color": "#00CEC9",
+    "type": "polyline",
+    "attributes": [
+      {
+        "name": "text_content",
+        "input_type": "text",
+        "mutable": true,
+        "values": [
+          ""
+        ],
+        "default_value": ""
+      },
+      {
+        "name": "pair_id",
+        "input_type": "text",
+        "mutable": true,
+        "values": [
+          ""
+        ],
+        "default_value": ""
+      }
+    ]
+  },
+  {
+    "name": "width_dimension_line",
+    "color": "#FFA502",
+    "type": "polyline",
+    "attributes": [
+      {
+        "name": "width",
+        "input_type": "number",
+        "mutable": true,
+        "values": [
+          "0;10;0.01"
+        ],
+        "default_value": "0"
+      }
+    ]
+  },
+  {
+    "name": "room_title",
+    "color": "#7F8C8D",
+    "type": "rectangle",
+    "attributes": [
+      {
+        "name": "text_content",
+        "input_type": "text",
+        "mutable": true,
+        "values": [
+          ""
+        ],
+        "default_value": ""
+      }
+    ]
+  },
+  {
+    "name": "val_text",
+    "color": "#9B59B6",
+    "type": "rectangle",
+    "attributes": [
+      {
+        "name": "text_content",
+        "input_type": "text",
+        "mutable": true,
+        "values": [
+          ""
+        ],
+        "default_value": ""
+      }
+    ]
+  }
+]

@@ -144,6 +144,58 @@ EQUIP_ROOM_KW = ["机房", "泵房", "配电", "控制室", "通信", "信号", 
                  "变电", "电缆", "风室", "管理", "票务", "站长", "备品", "工具",
                  "卫生间", "厕所"]
 
+# QC 报 BAD_LABEL 时给出的拆解指引（标注公司可能误以为"删了就过"，要明确告知"按内容拆"）
+LABEL_GUIDANCE = {
+    "注释": (
+        "千万不要直接删！按内容拆解：\n"
+        "      · FM甲1023 等防火门型号 → 移到对应 fire_door box 的 text_content 属性\n"
+        "      · 防火间距 13.92m 等数字 → dimension_val + text_content=\"13.92\"\n"
+        "      · 环控机房 等房间名 → room_title + text_content=\"环控机房\"\n"
+        "      · 防火分区面积 1133.6㎡ → val_text + text_content（整段框）\n"
+        "      如该图有文字层（建筑名能 Ctrl+C 复制），直接删即可（程序会从文字层抽）。"
+    ),
+    "宽度线": "应改为 width_dimension_line（规范名）",
+    "楼梯/扶梯": "应改为 stair_escalator（规范名，不要带斜杠）",
+    "风亭/风亭组": "应改为 vent_group_ground（规范名，不要带斜杠）",
+    "车站地面出入口/疏散口": (
+        "应改为 station_exit_ground（规范名）。\n"
+        "      若确实要区分'地面出入口'与'紧急疏散口'，请先报项目方批准新增子类。"
+    ),
+}
+
+# ---------- CVAT 模板导出（建议2：模板锁死） ----------
+# 给每个标签分配 CVAT 项目里显示用的颜色（按图纸功能区分）
+LABEL_COLORS = {
+    # 总平面图
+    "station_exit_ground":  "#2E86DE",
+    "vent_group_ground":    "#10AC84",
+    "surrounding_building": "#8E44AD",
+    "building_meta":        "#5F6A6A",
+    "vent_meta":            "#1ABC9C",
+    "dimension_val":        "#E67E22",
+    "fire_clearance_line":  "#E74C3C",
+    # 站厅层
+    "fire_compartment":     "#FF6B6B",
+    "public_area":          "#48CAE4",
+    "commercial_shop":      "#F39C12",
+    "safety_exit":          "#00B894",
+    "stair_escalator":      "#6C5CE7",
+    "gate":                 "#FDCB6E",
+    "fire_door":            "#D63031",
+    "fire_shutter":         "#A29BFE",
+    "draft_curtain":        "#74B9FF",
+    "evac_distance_line":   "#00CEC9",
+    "width_dimension_line": "#FFA502",
+    "room_title":           "#7F8C8D",
+    "val_text":             "#9B59B6",
+}
+
+# 几何类型 -> CVAT type
+_CVAT_GEOM_MAP = {"box": "rectangle", "polygon": "polygon", "polyline": "polyline"}
+
+# 属性是否可变（mutable=True 的标好后还能改；如 text 内容）
+_MUTABLE_ATTRS = {"text_content", "pair_id", "name", "area_m2", "floors", "height_m", "width"}
+
 ALLOWED_LABELS = set(LABELS)
 ALLOWED_ATTR_KEYS = {a for v in LABELS.values() for a in v["attrs"]}
 ZH = re.compile(r"[一-鿿]")
@@ -261,6 +313,50 @@ def iou_box(a, b):
     ua = (ax1-ax0)*(ay1-ay0) + (bx1-bx0)*(by1-by0) - inter
     return inter / ua if ua > 0 else 0.0
 
+
+def _point_in_poly(px, py, poly):
+    """射线法判定 (px, py) 是否在 polygon 内部。poly = [(x,y), ...]"""
+    n = len(poly)
+    if n < 3: return False
+    inside = False
+    j = n - 1
+    for i in range(n):
+        xi, yi = poly[i]
+        xj, yj = poly[j]
+        if ((yi > py) != (yj > py)) and \
+           (px < (xj - xi) * (py - yi) / ((yj - yi) or 1e-12) + xi):
+            inside = not inside
+        j = i
+    return inside
+
+
+def _box_center(box):
+    """box = ((x0,y0),(x1,y1)) → (cx, cy)"""
+    return ((box[0][0] + box[1][0]) / 2.0, (box[0][1] + box[1][1]) / 2.0)
+
+
+def _min_dist_point_to_boxes(p, boxes):
+    """点到一组矩形的最小距离（用矩形最近点近似）"""
+    px, py = p
+    best = float("inf")
+    for (x0, y0), (x1, y1) in boxes:
+        cx = max(x0, min(px, x1))
+        cy = max(y0, min(py, y1))
+        d = ((px - cx) ** 2 + (py - cy) ** 2) ** 0.5
+        if d < best: best = d
+    return best
+
+
+def _min_dist_point_to_polylines(p, polylines):
+    """点到一组折线的最小距离（用顶点最近近似，演示足够）"""
+    px, py = p
+    best = float("inf")
+    for line in polylines:
+        for x, y in line:
+            d = ((px - x) ** 2 + (py - y) ** 2) ** 0.5
+            if d < best: best = d
+    return best
+
 def qc(path, dtype="auto"):
     tree, root, imgs = load_cvat(path)
     rep = Report()
@@ -279,6 +375,8 @@ def qc(path, dtype="auto"):
     safety_per_image = defaultdict(list) # img_name -> list of pair_id
     # 必填属性按"图×标签×属性"分桶聚合（替代原 per-shape WARN，区分 全空/部分填/全填）
     req_fill = defaultdict(lambda: [0, 0])  # (img_name, label, attr_key) -> [total, filled]
+    # P2 几何关系派生检查：按图收集各类对象，循环结束后做"邻接/包含"完整性校验
+    geom_per_image = defaultdict(lambda: defaultdict(list))  # img -> label -> list of (pts, box_or_poly)
 
     for im in imgs:
         # 每张图各自的宽高（修复：原来用 imgs[0] 的 W/H 比较所有图，会误报越界）
@@ -291,7 +389,11 @@ def qc(path, dtype="auto"):
             # --- 标签合法性 ---
             if lab not in ALLOWED_LABELS:
                 lvl = "ERROR" if ZH.search(lab or "") else "WARN"
-                rep.add(lvl, "BAD_LABEL", f"非法/未知标签 {lab!r}（不在受控词表）")
+                guidance = LABEL_GUIDANCE.get(lab, "")
+                msg = f"非法/未知标签 {lab!r}（不在受控词表）"
+                if guidance:
+                    msg += f"\n      💡 处理建议：{guidance}"
+                rep.add(lvl, "BAD_LABEL", msg)
                 continue
             spec = LABELS[lab]
 
@@ -345,6 +447,11 @@ def qc(path, dtype="auto"):
                 pid = present.get("pair_id", "")
                 if pid:
                     safety_per_image[img_name].append(pid)
+            # P2 几何关系派生：按图收集，循环结束后做 ORPHAN 检查
+            if lab in ("val_text", "room_title", "fire_compartment", "fire_door",
+                       "stair_escalator", "gate", "width_dimension_line",
+                       "dimension_val", "fire_clearance_line"):
+                geom_per_image[img_name][lab].append(pts if pts else [])
 
     # --- 必填属性按"图×标签×属性"分级 ---
     # 该图同标签同属性全部留空 → 推断"有文字层、程序代填"，发 INFO 提示
@@ -358,6 +465,70 @@ def qc(path, dtype="auto"):
         elif filled < total:
             rep.add("WARN", "ATTR_PARTIAL",
                     f"[{base_nm}] {lab}.{req} 仅填了 {filled}/{total}（部分填部分空），请核实是否有漏填")
+
+    # --- P2 几何关系派生 ORPHAN 检查 ---
+    # 阈值（像素）：在 1024² 以上的高清底图上的经验值，可按 image W/H 自适应
+    ORPHAN_NEAR_PX = 80     # 尺寸线/数值与对应实体的就近阈值
+    ORPHAN_NEAR_PX_FAR = 150
+    for im in imgs:
+        nm = im.get("name") or ""
+        base_nm = os.path.basename(nm)
+        g = geom_per_image.get(nm, {})
+        if not g: continue
+        # 取出 fire_compartment 多边形（用于"中心点在分区内"判定）
+        fc_polys = [shape for shape in g.get("fire_compartment", []) if shape and len(shape) >= 3]
+        # box 简化为左上右下两点
+        def _to_box(pts):
+            if not pts: return None
+            xs = [p[0] for p in pts]; ys = [p[1] for p in pts]
+            return ((min(xs), min(ys)), (max(xs), max(ys)))
+        # 邻接对象（站厅层 width_dimension_line 端点要找的目标）
+        hall_anchors = []
+        for k in ("fire_door", "stair_escalator", "gate"):
+            for pts in g.get(k, []):
+                b = _to_box(pts)
+                if b: hall_anchors.append(b)
+        # 总平面 dimension_val 邻接目标
+        site_lines = [pts for pts in g.get("fire_clearance_line", []) if pts]
+
+        # ① val_text 中心点必须落在某个 fire_compartment polygon 内
+        for pts in g.get("val_text", []):
+            b = _to_box(pts)
+            if not b or not fc_polys: continue
+            cx, cy = _box_center(b)
+            if not any(_point_in_poly(cx, cy, poly) for poly in fc_polys):
+                rep.add("WARN", "VAL_TEXT_ORPHAN",
+                        f"[{base_nm}] val_text 框 ({cx:.0f},{cy:.0f}) 不在任何 fire_compartment 多边形内 — 请核实归属")
+
+        # ② room_title 中心点必须落在某个 fire_compartment polygon 内
+        for pts in g.get("room_title", []):
+            b = _to_box(pts)
+            if not b or not fc_polys: continue
+            cx, cy = _box_center(b)
+            if not any(_point_in_poly(cx, cy, poly) for poly in fc_polys):
+                rep.add("WARN", "ROOM_TITLE_ORPHAN",
+                        f"[{base_nm}] room_title 框 ({cx:.0f},{cy:.0f}) 不在任何 fire_compartment 多边形内 — 请核实归属")
+
+        # ③ width_dimension_line 两端点都应有就近实体（fire_door/stair/gate），<80px
+        if hall_anchors:
+            for pts in g.get("width_dimension_line", []):
+                if not pts or len(pts) < 2: continue
+                ep = [pts[0], pts[-1]]   # 取折线两个端点
+                orphan_ends = sum(1 for p in ep
+                                  if _min_dist_point_to_boxes(p, hall_anchors) > ORPHAN_NEAR_PX)
+                if orphan_ends == 2:
+                    rep.add("WARN", "WIDTH_LINE_ORPHAN",
+                            f"[{base_nm}] width_dimension_line 两端 >{ORPHAN_NEAR_PX}px 内都没有 fire_door/stair_escalator/gate — 请核实关联实体")
+
+        # ④ dimension_val 框中心 <150px 内应有 fire_clearance_line（总平面）
+        if site_lines and g.get("dimension_val"):
+            for pts in g.get("dimension_val", []):
+                b = _to_box(pts)
+                if not b: continue
+                cx, cy = _box_center(b)
+                if _min_dist_point_to_polylines((cx, cy), site_lines) > ORPHAN_NEAR_PX_FAR:
+                    rep.add("WARN", "DIM_VAL_ORPHAN",
+                            f"[{base_nm}] dimension_val ({cx:.0f},{cy:.0f}) {ORPHAN_NEAR_PX_FAR}px 内没有 fire_clearance_line — 请核实归属")
 
     # --- 必现类缺失 ---
     for lab, need in MANDATORY.get(group, {}).items():
@@ -618,6 +789,72 @@ def _write_cvat(out_xml, img_name, W, H, text_boxes, lines, polys):
     ET.ElementTree(root).write(out_xml, encoding="utf-8", xml_declaration=True)
 
 
+# =====================================================================
+#  4) EXPORT-CVAT-LABELS —— 从 LABELS/ENUMS 生成 CVAT 项目模板（建议2：模板锁死）
+# =====================================================================
+def export_cvat_labels(out_path=None):
+    """生成 CVAT 项目可直接导入的 labels.json，锁死下拉菜单 + 属性枚举。
+
+    标注公司在 CVAT 项目设置 → 'Raw' 模式贴入，标注员前端只能从受控词表里选。
+    避免再出现"宽度线" / "楼梯/扶梯" / "注释" 等错名标签或非法属性键。
+    """
+    out_path = out_path or "rules/cvat_labels.json"
+    labels_out = []
+    for name, spec in LABELS.items():
+        cvat_type = _CVAT_GEOM_MAP.get(spec["geom"], "any")
+        attrs_out = []
+        for a in spec["attrs"]:
+            # 决定 input_type
+            if a in ENUMS:
+                vals = sorted(ENUMS[a])
+                # 枚举值多时用 select，少时用 radio
+                input_type = "radio" if len(vals) <= 4 else "select"
+                # default_value 优先选 unknown，否则取第一个
+                default = "unknown" if "unknown" in vals else vals[0]
+            elif a in ("area_m2", "height_m", "floors", "width"):
+                # CVAT number 格式：values=["min;max;step"]
+                input_type = "number"
+                ranges = {
+                    "area_m2": "0;100000;0.01",
+                    "height_m": "0;300;0.1",
+                    "floors": "0;100;1",
+                    "width": "0;10;0.01",
+                }
+                vals = [ranges.get(a, "0;1000;0.01")]
+                default = "0"
+            else:
+                # 文本类（text_content / pair_id / name 等）
+                input_type = "text"
+                vals = [""]
+                default = ""
+            attrs_out.append({
+                "name": a,
+                "input_type": input_type,
+                "mutable": a in _MUTABLE_ATTRS,
+                "values": vals,
+                "default_value": default,
+            })
+        labels_out.append({
+            "name": name,
+            "color": LABEL_COLORS.get(name, "#808080"),
+            "type": cvat_type,
+            "attributes": attrs_out,
+        })
+    # 按 group 排序：先 site 后 hall（与规范行文一致）
+    site_first = [l for l in labels_out if LABELS[l["name"]]["group"] == "site"]
+    hall_then  = [l for l in labels_out if LABELS[l["name"]]["group"] == "hall"]
+    labels_out = site_first + hall_then
+
+    os.makedirs(os.path.dirname(os.path.abspath(out_path)) or ".", exist_ok=True)
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(labels_out, f, ensure_ascii=False, indent=2)
+    print(f"[export-cvat-labels] 已生成: {out_path}")
+    print(f"  共 {len(labels_out)} 个标签（site {len(site_first)} + hall {len(hall_then)}），覆盖所有受控词表。")
+    print(f"  使用方法：CVAT 项目设置 → Labels → 切到 'Raw' 模式 → 粘贴本文件内容 → Save。")
+    print(f"  标注员前端只能从下拉菜单选标签和属性值，无法自创。")
+    return out_path
+
+
 def _overlay(img_path, out_dir, base, text_boxes, lines, polys, cv2, np):
     # OpenCV 在 Windows 读不了中文路径，改用 fromfile+imdecode / imencode+tofile
     im = cv2.imdecode(np.fromfile(img_path, dtype=np.uint8), cv2.IMREAD_COLOR)
@@ -648,6 +885,8 @@ def main():
     p3 = sub.add_parser("prelabel"); p3.add_argument("pdf"); p3.add_argument("out", nargs="?")
     p3.add_argument("--page", type=int, default=0); p3.add_argument("--dpi", type=int, default=200)
     p4 = sub.add_parser("all"); p4.add_argument("inp"); p4.add_argument("--type", default="auto", choices=["auto","hall","site"])
+    p5 = sub.add_parser("export-cvat-labels", help="生成 CVAT 项目可导入的 labels.json，锁死下拉菜单")
+    p5.add_argument("out", nargs="?", default="rules/cvat_labels.json")
 
     a = ap.parse_args()
     if a.cmd == "convert":
@@ -659,6 +898,8 @@ def main():
     elif a.cmd == "all":
         out, ok = convert(a.inp)
         qc(out, a.type)
+    elif a.cmd == "export-cvat-labels":
+        export_cvat_labels(a.out)
     else:
         ap.print_help()
 
