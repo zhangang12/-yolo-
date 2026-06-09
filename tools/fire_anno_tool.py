@@ -94,7 +94,9 @@ LABELS = {
     "safety_exit":          dict(geom="box",      group="hall", attrs=["pair_id"], required=[]),
     "stair_escalator":      dict(geom="box",      group="hall", attrs=[], required=[]),
     "gate":                 dict(geom="box",      group="hall", attrs=[], required=[]),
-    "fire_door":            dict(geom="box",      group="hall", attrs=["class", "swing_dir"], required=["class", "swing_dir"]),
+    # text_content：团队按规范§7关系绑定方案，把 FM甲1023 等型号文字填到 fire_door 属性
+    # 这是允许的（详细版§7"主对象=防火门 box"），加入受控属性集避免误报 EXTRA_ATTR
+    "fire_door":            dict(geom="box",      group="hall", attrs=["class", "swing_dir", "text_content"], required=["class", "swing_dir"]),
     "fire_shutter":         dict(geom="box",      group="hall", attrs=[], required=[]),
     "draft_curtain":        dict(geom="box",      group="hall", attrs=[], required=[]),
     # ---- 文字/尺寸类：v3 由程序从矢量直抽；仅【无文字层】图纸回退人工标，故非必现 ----
@@ -117,7 +119,7 @@ ENUMS = {
     "class":          {"甲级", "乙级", "unknown"},
     "swing_dir":      {"顺着疏散方向", "逆着疏散方向"},
     "vent_function":  {"新风", "排风", "活塞风", "冷却塔风", "排烟"},
-    "discharge_type": {"侧出", "敞口", "高风亭"},
+    "discharge_type": {"侧出", "敞口", "高风亭", "unknown"},
     "building_type":  {"多层民用", "高层民用", "超高层民用", "丙类厂房",
                        "丁戊类厂房", "甲乙类厂房库房", "加油加气加氢站", "其他", "unknown"},
     "fire_rating":    {"一级", "二级", "三级", "四级", "unknown"},
@@ -275,6 +277,8 @@ def qc(path, dtype="auto"):
     # 疏散方案：按图收集 evac_distance_line / safety_exit 的 pair_id 与折线长度，做配对一致性检查
     evac_per_image = defaultdict(list)   # img_name -> list of (pair_id, text_content, pts)
     safety_per_image = defaultdict(list) # img_name -> list of pair_id
+    # 必填属性按"图×标签×属性"分桶聚合（替代原 per-shape WARN，区分 全空/部分填/全填）
+    req_fill = defaultdict(lambda: [0, 0])  # (img_name, label, attr_key) -> [total, filled]
 
     for im in imgs:
         # 每张图各自的宽高（修复：原来用 imgs[0] 的 W/H 比较所有图，会误报越界）
@@ -321,9 +325,11 @@ def qc(path, dtype="auto"):
                         rep.add("INFO", "EXTRA_ATTR", f"{lab} 含未声明属性 {k!r}")
                 if k in ENUMS and v and v not in ENUMS[k]:
                     rep.add("WARN", "BAD_ENUM", f"{lab}.{k} 取值 {v!r} 不在允许集 {sorted(ENUMS[k])}")
+            # 必填属性：先聚合，循环结束后按 全空/部分填/全填 分级报告
             for req in spec["required"]:
-                if not present.get(req):
-                    rep.add("WARN", "MISSING_ATTR", f"{lab} 缺必填属性 {req!r}（空值）")
+                req_fill[(img_name, lab, req)][0] += 1
+                if present.get(req):
+                    req_fill[(img_name, lab, req)][1] += 1
 
             if lab == "room_title":
                 room_titles.append(present.get("text_content", ""))
@@ -339,6 +345,19 @@ def qc(path, dtype="auto"):
                 pid = present.get("pair_id", "")
                 if pid:
                     safety_per_image[img_name].append(pid)
+
+    # --- 必填属性按"图×标签×属性"分级 ---
+    # 该图同标签同属性全部留空 → 推断"有文字层、程序代填"，发 INFO 提示
+    # 全部填了 → ✅ 不报
+    # 部分填部分空 → 发 WARN（数据质量问题）
+    for (im_name, lab, req), (total, filled) in sorted(req_fill.items()):
+        base_nm = os.path.basename(im_name)
+        if filled == 0:
+            rep.add("INFO", "ATTR_ALL_BLANK",
+                    f"[{base_nm}] {lab}.{req} {total}/{total} 全部留空 — 如果该图【有文字层】请忽略（程序会代抽）；如果【无文字层】请补齐，看不到填 unknown")
+        elif filled < total:
+            rep.add("WARN", "ATTR_PARTIAL",
+                    f"[{base_nm}] {lab}.{req} 仅填了 {filled}/{total}（部分填部分空），请核实是否有漏填")
 
     # --- 必现类缺失 ---
     for lab, need in MANDATORY.get(group, {}).items():
