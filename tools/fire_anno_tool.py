@@ -446,7 +446,11 @@ def qc(path, dtype="auto"):
             if lab == "safety_exit":
                 pid = present.get("pair_id", "")
                 if pid:
-                    safety_per_image[img_name].append(pid)
+                    # safety_exit.pair_id 允许逗号分隔多个值（一个出口对应多条疏散路径）
+                    # 例如 "01,02" 表示该 safety_exit 同时是 01 和 02 号疏散线的终点
+                    for p in re.split(r"[,，;；\s]+", pid):
+                        p = p.strip()
+                        if p: safety_per_image[img_name].append(p)
             # P2 几何关系派生：按图收集，循环结束后做 ORPHAN 检查
             if lab in ("val_text", "room_title", "fire_compartment", "fire_door",
                        "stair_escalator", "gate", "width_dimension_line",
