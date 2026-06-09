@@ -28,18 +28,18 @@
 
 | target | 含义 | 必备字段 |
 |---|---|---|
-| `fire_compartment` | 防火分区 | `id`, `area_m2`, `zone_type`(`public`/`equipment`/`platform`), `is_shared_concourse` |
+| `fire_compartment` | 防火分区 | `id`, `area_m2`, `zone_type`(`public`/`equipment_unmanned`/`equipment_staffed`/`platform`), `is_shared_concourse`, `exits`(数组), `effective_exits`(派生) |
 | `evac_distance_line` | 疏散距离线 | `id`, `length_m`, `kind`(`any_to_exit`/`door_to_exit_between`/`door_to_exit_deadend`) |
-| `exit` | 安全出口 | `id`, `leads_to`(`ground`/`other`), `direction_group`, `zone`(`public`/`equipment`/`platform`) |
+| `exit` | 安全出口 | `id`, `leads_to`(`ground`/`other`), `direction_group`, `zone`(`public`/`equipment_unmanned`/`equipment_staffed`/`platform`) |
 | `exit_pair` | 出口两两组合（由上游准备） | `id`, `exit_a`, `exit_b`, `relation`(`same_direction`/`adjacent`), `distance_m` |
-| `door` | 门 | `id`, `clear_width_m`(=洞口宽-0.15), `swing_direction`(`evacuation`/`reverse`), `is_evacuation`, `position`(`between_exits`/`dead_end`/`other`), `zone`, `distance_to_nearest_exit_m`, `class`(`甲级`/`乙级`/`unknown`) |
-| `corridor` | 走道/楼梯 | `id`, `kind`(`evac_corridor`/`evac_stair`/`equip_corridor_single`/`equip_corridor_double`/`entrance_passage`), `clear_width_m`, `length_m` |
+| `door` | 门 | `id`, `clear_width_m`(=洞口宽-0.15), `swing_direction`(`evacuation`/`reverse`), `is_evacuation`, `position`(`between_exits`/`dead_end`/`other`), `zone`, `distance_to_nearest_exit_m`, `class`(`甲级`/`乙级`/`unknown`), `is_on_firewall`, `is_always_open` |
+| `corridor` | 走道/楼梯 | `id`, `kind`(`evac_corridor`/`evac_stair`/`equip_corridor_single`/`equip_corridor_double`/`entrance_passage`/`ground_stair_landing`), `clear_width_m`, `length_m` |
 | `shop` | 商铺 | `id`, `area_m2` |
 | `shop_pair` | 商铺两两组合 | `id`, `shop_a`, `shop_b`, `opening_distance_m` |
 | `fire_shutter` | 防火卷帘 | `id`, `opening_width_m`(洞口宽), `shutter_width_m`(卷帘宽) |
-| `vent_pair` | 风口两两组合 | `id`, `kind`(`fresh_vs_exhaust_or_piston` 等), `distance_m` |
+| `vent_pair` | 风口两两组合 | `id`, `kind`(`fresh_vs_exhaust_or_piston` 等), `distance_m`, `is_exhaust_higher`(派生：排风/活塞口是否高于新风口) |
 | `building_clearance` | 出入口/风亭→周边建筑 防火间距 | `id`, `building_name`, `building_category`(`多层民用`/`高层民用`/`加油加气加氢站`), `distance_m`, `nearest_kind` |
-| `station` | 站点全局对象 | `type`(`underground`/`at_grade`/`elevated`), `height_m`, `transfer_lines`, `public_zone`(含 `exits`, `commercial_shops`, `area_m2`), `equipment_zone` |
+| `station` | 站点全局对象 | `type`(`underground`/`at_grade`/`elevated`), `height_m`, `transfer_lines`, `public_zone`(含 `exits`, `commercial_shops`, `area_m2`), `equipment_zone`, `project_all_doors_class_A`(布尔：本工程是否承诺所有防火门均甲级) |
 
 ### 三 ✻ 标注源对象 → 规则消费对象的映射
 
@@ -48,9 +48,11 @@
 | 标注源对象（CVAT） | → 规则消费对象 | 字段映射说明 |
 |---|---|---|
 | `surrounding_building` polygon + `name` / `building_type` / `fire_rating` / `floors` / `height_m` 属性 | `building_clearance`（每条防火间距一条） | `building_name ← name`；`building_category ← building_type`；`distance_m` 由几何就近计算；每栋建筑可能对站点出入口/风亭分别派生多条 |
-| `vent_group_ground` polygon + `vent_function` / `discharge_type` / `name` / `area_m2` 属性 | `vent_pair`（两两风亭组合，仅当一方=新风、另一方=排风/活塞风时生成） | `kind ← "fresh_vs_exhaust_or_piston"`（基于 vent_function 配对）；`distance_m` 由几何最近距离计算 |
-| `fire_door` box + `class` / `swing_dir` 属性 | `door` | `class` 直接透传；`swing_direction ← swing_dir`（"顺着疏散方向"→`evacuation`，"逆着疏散方向"→`reverse`）；`clear_width_m` 由洞口宽 − 0.15 算出（洞口宽来自就近尺寸数字） |
-| `fire_compartment` polygon + `zone_type` 属性 | `fire_compartment` | `area_m2` 由几何面积 + 比例尺算出；`zone_type` 透传（公共区→`public`，无人区/有人值守区→`equipment`） |
+| `vent_group_ground` polygon + `vent_function` / `discharge_type` / `name` / `area_m2` 属性 | `vent_pair`（两两风亭组合，仅当一方=新风、另一方=排风/活塞风时生成） | `kind ← "fresh_vs_exhaust_or_piston"`（基于 vent_function 配对）；`distance_m` 由几何最近距离计算；`is_exhaust_higher ← discharge_type` 推断（排风/活塞=`高风亭` 且新风=`侧出/敞口` → `true`；同高度 → `false`；信息不足 → `null` 触发 review） |
+| `fire_door` box + `class` / `swing_dir` 属性 | `door` | `class` 直接透传；`swing_direction ← swing_dir`（"顺着疏散方向"→`evacuation`，"逆着疏散方向"→`reverse`）；`clear_width_m` 由洞口宽 − 0.15 算出（洞口宽来自就近尺寸数字）；`is_on_firewall` 由几何派生：fire_door 中心点是否落在 `fire_compartment` 多边形边界或 `fire_shutter` 上；`is_always_open` 当前无源标注，需项目方在配置补 |
+| `fire_compartment` polygon + `zone_type` 属性 | `fire_compartment` | `area_m2` 由几何面积 + 比例尺算出；`zone_type` 透传（公共区→`public`，**无人区→`equipment_unmanned`**，**有人值守区→`equipment_staffed`**）；`exits ←` 落在该多边形边界附近（< 2m）的 `safety_exit` 集合；`effective_exits ← exits ∪` 邻接分区共用防火墙上的"常开甲级防火门"（per GB 50157 § 28.2.3-3 注） |
+| `evac_distance_line` polyline + `text_content` / `pair_id` 属性 | `evac_distance_line` | `length_m` ← 折线像素累计长度 × 图纸比例尺；`kind` 派生：终点最近的实体 = `safety_exit` → `any_to_exit`；终点是房间门 + 位置 = `between_exits` → `door_to_exit_between`；终点是房间门 + `dead_end` → `door_to_exit_deadend` |
+| `safety_exit` box + `pair_id` 属性 | `exit` | `leads_to`：终点在地面图（站点出入口所在层）则 `ground`，否则 `other`；`zone` ← 该 safety_exit 所在 `fire_compartment.zone_type`；`direction_group` 用方位角聚类（同 ±15° 方向算一组） |
 
 标注团队**只关心源对象层**，详见 [`docs/标注规范说明_详细版.md`](../docs/标注规范说明_详细版.md)。规则编辑者**只关心消费对象层**（上面那张主表）。
 
@@ -154,6 +156,27 @@
 | 规则 | 同方向 same_direction | 相邻 adjacent |
 |---|---|---|
 | 两个安全出口净距 | ≥10m | ≥20m |
+
+> **`exit_pair.relation` 派生口径**（预处理）：
+> - `same_direction`：两个 exit 的 `direction_group` 相同（方位角 ±15° 内）
+> - `adjacent`：两个 exit 不同方向、且欧氏距离 ≤ 50m
+> - 其他：不生成 exit_pair（不触发该类规则）
+
+> **`fire_compartment.is_shared_concourse` 数据来源**：
+> 项目级配置字段（站点是否换乘共用站厅），不从 CVAT 标注派生。
+> 由项目方在 `station.transfer_lines` 同时手填于 `examples/<station>_meta.json`，
+> 由预处理脚本注入到对应公共区 fire_compartment。
+
+> **`fire_compartment.zone_type` 四类语义**：
+> | 标注源 zone_type | 消费层 zone_type | 含义 |
+> |---|---|---|
+> | 公共区 | `public` | 站厅公共活动区（付费区+非付费区） |
+> | 无人区 | `equipment_unmanned` | 设备管理区，**无**长期值守人员（如变电、风室） |
+> | 有人值守区 | `equipment_staffed` | 设备管理区，**有**长期值守人员（如车控室、票务用房）—— **必须 ≥1 出口直通地面** |
+> | （站台层） | `platform` | 仅站台层平面图用，本批次无 |
+>
+> 跨"设备区"两子类的规则用 `op: in` 写并集：
+> `{"path": "target.zone_type", "op": "in", "value": ["equipment_unmanned", "equipment_staffed"]}`
 
 | 规则 | 单线 | 两线共用站厅 | 三线共用站厅 |
 |---|---|---|---|

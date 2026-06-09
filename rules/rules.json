@@ -148,8 +148,8 @@
         },
         {
           "path": "target.zone_type",
-          "op": "eq",
-          "value": "equipment"
+          "op": "in",
+          "value": ["equipment_unmanned", "equipment_staffed"]
         }
       ],
       "check": {
@@ -176,8 +176,8 @@
         },
         {
           "path": "target.zone_type",
-          "op": "eq",
-          "value": "equipment"
+          "op": "in",
+          "value": ["equipment_unmanned", "equipment_staffed"]
         }
       ],
       "check": {
@@ -209,8 +209,8 @@
         },
         {
           "path": "target.zone_type",
-          "op": "eq",
-          "value": "equipment"
+          "op": "in",
+          "value": ["equipment_unmanned", "equipment_staffed"]
         }
       ],
       "check": {
@@ -242,8 +242,8 @@
         },
         {
           "path": "target.zone_type",
-          "op": "eq",
-          "value": "equipment"
+          "op": "in",
+          "value": ["equipment_unmanned", "equipment_staffed"]
         }
       ],
       "check": {
@@ -288,8 +288,8 @@
       "applies_when": [
         {
           "path": "target.zone",
-          "op": "eq",
-          "value": "equipment"
+          "op": "in",
+          "value": ["equipment_unmanned", "equipment_staffed"]
         },
         {
           "path": "target.position",
@@ -316,8 +316,8 @@
       "applies_when": [
         {
           "path": "target.zone",
-          "op": "eq",
-          "value": "equipment"
+          "op": "in",
+          "value": ["equipment_unmanned", "equipment_staffed"]
         },
         {
           "path": "target.position",
@@ -362,26 +362,56 @@
     },
     {
       "rule_id": "EXIT-NUM-EQUIP-001",
-      "name": "地下车站设备与管理用房区安全出口数",
+      "name": "设备与管理用房区每个防火分区安全出口数",
       "category": "安全出口",
-      "target": "station",
+      "target": "fire_compartment",
       "applies_when": [
         {
-          "path": "station.type",
-          "op": "eq",
-          "value": "underground"
+          "path": "target.zone_type",
+          "op": "in",
+          "value": ["equipment_unmanned", "equipment_staffed"]
         }
       ],
       "check": {
         "type": "count",
-        "collection_path": "target.equipment_zone.exits",
+        "collection_path": "target.effective_exits",
         "op": "ge",
         "threshold": 2
       },
       "mandatory": true,
       "severity": "critical",
       "source": "GB 50157-2013 28.2.3-3",
-      "message": "地下设备与管理用房区安全出口共 {value} 个 < 规范下限 2 个"
+      "message": "设备区防火分区 {target.id} 安全出口 {value} 个 < 规范下限 2 个（含相邻分区共用防火墙上的常开甲级防火门）"
+    },
+    {
+      "rule_id": "EXIT-NUM-EQUIP-STAFFED-001",
+      "name": "有人值守的设备区防火分区应有1个出口直通地面",
+      "category": "安全出口",
+      "target": "fire_compartment",
+      "applies_when": [
+        {
+          "path": "target.zone_type",
+          "op": "eq",
+          "value": "equipment_staffed"
+        }
+      ],
+      "check": {
+        "type": "count",
+        "collection_path": "target.exits",
+        "filter": [
+          {
+            "path": "item.leads_to",
+            "op": "eq",
+            "value": "ground"
+          }
+        ],
+        "op": "ge",
+        "threshold": 1
+      },
+      "mandatory": true,
+      "severity": "critical",
+      "source": "GB 50157-2013 28.2.3-3",
+      "message": "有人值守的设备区防火分区 {target.id} 直通地面的安全出口 {value} 个 < 规范下限 1 个"
     },
     {
       "rule_id": "EXIT-DIST-SAME-DIR-001",
@@ -803,6 +833,98 @@
       "severity": "critical",
       "source": "GB 50016-2014 6.5.3-1",
       "message": "防火卷帘 {target.id} 宽度 {value}m > {threshold}m(洞口>30m 部位≤宽度/3 且≤20m)"
+    },
+    {
+      "rule_id": "DOOR-CLASS-FIREWALL-001",
+      "name": "防火墙(分区边界)上的防火门应为甲级",
+      "category": "防火门窗卷帘",
+      "target": "door",
+      "applies_when": [
+        {
+          "path": "target.is_on_firewall",
+          "op": "eq",
+          "value": true
+        }
+      ],
+      "check": {
+        "type": "compare",
+        "path": "target.class",
+        "op": "eq",
+        "threshold": "甲级"
+      },
+      "mandatory": true,
+      "severity": "critical",
+      "source": "GB 50016-2014 6.5.1 / GB 50157-2013 28.3",
+      "message": "防火墙上的防火门 {target.id} 等级 = {value}，应为 甲级"
+    },
+    {
+      "rule_id": "DOOR-CLASS-PROJECT-ALL-A-001",
+      "name": "本工程所有防火门均采用甲级(项目设计承诺)",
+      "category": "防火门窗卷帘",
+      "target": "door",
+      "applies_when": [
+        {
+          "path": "station.project_all_doors_class_A",
+          "op": "eq",
+          "value": true
+        }
+      ],
+      "check": {
+        "type": "compare",
+        "path": "target.class",
+        "op": "eq",
+        "threshold": "甲级"
+      },
+      "mandatory": false,
+      "severity": "warning",
+      "source": "审查要点(13) / 项目设计承诺",
+      "message": "门 {target.id} 等级 = {value}，与项目'所有防火门均甲级'承诺不符"
+    },
+    {
+      "rule_id": "LANDING-WIDTH-001",
+      "name": "出地面楼梯平台宽度",
+      "category": "疏散宽度",
+      "target": "corridor",
+      "applies_when": [
+        {
+          "path": "target.kind",
+          "op": "eq",
+          "value": "ground_stair_landing"
+        }
+      ],
+      "check": {
+        "type": "compare",
+        "path": "target.clear_width_m",
+        "op": "ge",
+        "threshold": 1.4
+      },
+      "mandatory": false,
+      "severity": "warning",
+      "source": "深圳地铁审查要点(16)",
+      "message": "出地面楼梯平台 {target.id} 宽度 {value}m < 1.4m(审查要点)"
+    },
+    {
+      "rule_id": "VENT-HEIGHT-001",
+      "name": "排风/活塞风口高度应高于新风口",
+      "category": "防排烟",
+      "target": "vent_pair",
+      "applies_when": [
+        {
+          "path": "target.kind",
+          "op": "eq",
+          "value": "fresh_vs_exhaust_or_piston"
+        }
+      ],
+      "check": {
+        "type": "compare",
+        "path": "target.is_exhaust_higher",
+        "op": "eq",
+        "threshold": true
+      },
+      "mandatory": false,
+      "severity": "warning",
+      "source": "审查要点(11) / 防排烟空气回流",
+      "message": "新风口 {target.fresh_id} 与 排风/活塞风口 {target.other_id} 高度关系 = {value}（应排风高于新风，true）"
     }
   ]
 }

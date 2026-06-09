@@ -4,6 +4,7 @@
     "type": "underground",
     "height_m": 0,
     "transfer_lines": 1,
+    "project_all_doors_class_A": true,
     "public_zone": {
       "exits": [
         {"id": "EX-1", "leads_to": "ground"}
@@ -24,8 +25,18 @@
   "fire_compartment": [
     {"id": "FC-PUB-OK",   "area_m2": 4800, "zone_type": "public",    "is_shared_concourse": false},
     {"id": "FC-PUB-WARN", "area_m2": 5600, "zone_type": "public",    "is_shared_concourse": false},
-    {"id": "FC-EQ-UG-OK", "area_m2": 1400, "zone_type": "equipment"},
-    {"id": "FC-EQ-UG-NG", "area_m2": 1820, "zone_type": "equipment"}
+    {"id": "FC-EQ-UNMANNED-OK", "area_m2": 1400, "zone_type": "equipment_unmanned",
+     "exits": [{"id": "EX-E1", "leads_to": "ground"}, {"id": "EX-E2", "leads_to": "other"}],
+     "effective_exits": [{"id": "EX-E1", "leads_to": "ground"}, {"id": "EX-E2", "leads_to": "other"}]},
+    {"id": "FC-EQ-UNMANNED-NG", "area_m2": 1820, "zone_type": "equipment_unmanned",
+     "exits": [{"id": "EX-E3", "leads_to": "other"}],
+     "effective_exits": [{"id": "EX-E3", "leads_to": "other"}]},
+    {"id": "FC-EQ-STAFFED-OK", "area_m2": 1200, "zone_type": "equipment_staffed",
+     "exits": [{"id": "EX-E4", "leads_to": "ground"}, {"id": "EX-E5", "leads_to": "other"}],
+     "effective_exits": [{"id": "EX-E4", "leads_to": "ground"}, {"id": "EX-E5", "leads_to": "other"}]},
+    {"id": "FC-EQ-STAFFED-NG-NO-GROUND", "area_m2": 1100, "zone_type": "equipment_staffed",
+     "exits": [{"id": "EX-E6", "leads_to": "other"}, {"id": "EX-E7", "leads_to": "other"}],
+     "effective_exits": [{"id": "EX-E6", "leads_to": "other"}, {"id": "EX-E7", "leads_to": "other"}]}
   ],
   "evac_distance_line": [
     {"id": "EVAC-OK", "length_m": 42, "kind": "any_to_exit"},
@@ -39,17 +50,29 @@
   ],
   "door": [
     {"id": "D-OK", "clear_width_m": 0.95, "swing_direction": "evacuation", "is_evacuation": true,
-     "zone": "public", "position": "other"},
+     "zone": "public", "position": "other", "class": "甲级", "is_on_firewall": false},
     {"id": "D-NARROW", "clear_width_m": 0.85, "swing_direction": "evacuation", "is_evacuation": true,
-     "zone": "public", "position": "other"},
+     "zone": "public", "position": "other", "class": "甲级", "is_on_firewall": false},
     {"id": "D-REVERSE", "clear_width_m": 1.00, "swing_direction": "reverse", "is_evacuation": true,
-     "zone": "public", "position": "other"},
+     "zone": "public", "position": "other", "class": "甲级", "is_on_firewall": false},
     {"id": "D-EQ-BETWEEN-OK", "clear_width_m": 1.0, "swing_direction": "evacuation", "is_evacuation": true,
-     "zone": "equipment", "position": "between_exits", "distance_to_nearest_exit_m": 35},
+     "zone": "equipment_unmanned", "position": "between_exits", "distance_to_nearest_exit_m": 35,
+     "class": "甲级", "is_on_firewall": false},
     {"id": "D-EQ-BETWEEN-NG", "clear_width_m": 1.0, "swing_direction": "evacuation", "is_evacuation": true,
-     "zone": "equipment", "position": "between_exits", "distance_to_nearest_exit_m": 45},
+     "zone": "equipment_unmanned", "position": "between_exits", "distance_to_nearest_exit_m": 45,
+     "class": "甲级", "is_on_firewall": false},
     {"id": "D-EQ-DEADEND-NG", "clear_width_m": 1.0, "swing_direction": "evacuation", "is_evacuation": true,
-     "zone": "equipment", "position": "dead_end", "distance_to_nearest_exit_m": 28}
+     "zone": "equipment_staffed", "position": "dead_end", "distance_to_nearest_exit_m": 28,
+     "class": "甲级", "is_on_firewall": false},
+    {"id": "D-FIREWALL-OK", "clear_width_m": 1.2, "swing_direction": "evacuation", "is_evacuation": true,
+     "zone": "public", "position": "other",
+     "class": "甲级", "is_on_firewall": true},
+    {"id": "D-FIREWALL-NG", "clear_width_m": 1.2, "swing_direction": "evacuation", "is_evacuation": true,
+     "zone": "public", "position": "other",
+     "class": "乙级", "is_on_firewall": true},
+    {"id": "D-PROJECT-COMMIT-NG", "clear_width_m": 1.0, "swing_direction": "evacuation", "is_evacuation": true,
+     "zone": "public", "position": "other",
+     "class": "乙级", "is_on_firewall": false}
   ],
   "corridor": [
     {"id": "C-EVAC-OK",         "kind": "evac_corridor",         "clear_width_m": 1.5, "length_m": 30},
@@ -57,7 +80,9 @@
     {"id": "C-STAIR-OK",        "kind": "evac_stair",            "clear_width_m": 1.4, "length_m": 5},
     {"id": "C-EQ-SINGLE-NG",    "kind": "equip_corridor_single", "clear_width_m": 1.0, "length_m": 20},
     {"id": "C-EQ-DOUBLE-NG",    "kind": "equip_corridor_double", "clear_width_m": 1.3, "length_m": 20},
-    {"id": "C-ENTRANCE-LONG",   "kind": "entrance_passage",      "clear_width_m": 2.0, "length_m": 120}
+    {"id": "C-ENTRANCE-LONG",   "kind": "entrance_passage",      "clear_width_m": 2.0, "length_m": 120},
+    {"id": "C-LANDING-OK",      "kind": "ground_stair_landing",  "clear_width_m": 1.5, "length_m": 3},
+    {"id": "C-LANDING-NG",      "kind": "ground_stair_landing",  "clear_width_m": 1.2, "length_m": 3}
   ],
   "shop": [
     {"id": "SHOP-A", "area_m2": 28},
@@ -70,8 +95,9 @@
     {"id": "SP-B-C", "shop_a": "SHOP-B", "shop_b": "SHOP-C", "opening_distance_m": 10}
   ],
   "vent_pair": [
-    {"id": "VP-OK", "kind": "fresh_vs_exhaust_or_piston", "fresh_id": "VF-1", "other_id": "VE-1", "distance_m": 12},
-    {"id": "VP-NG", "kind": "fresh_vs_exhaust_or_piston", "fresh_id": "VF-2", "other_id": "VE-2", "distance_m": 7}
+    {"id": "VP-OK", "kind": "fresh_vs_exhaust_or_piston", "fresh_id": "VF-1", "other_id": "VE-1", "distance_m": 12, "is_exhaust_higher": true},
+    {"id": "VP-NG", "kind": "fresh_vs_exhaust_or_piston", "fresh_id": "VF-2", "other_id": "VE-2", "distance_m": 7,  "is_exhaust_higher": false},
+    {"id": "VP-HEIGHT-NG", "kind": "fresh_vs_exhaust_or_piston", "fresh_id": "VF-3", "other_id": "VE-3", "distance_m": 15, "is_exhaust_higher": false}
   ],
   "fire_shutter": [
     {"id": "SH-LE30-OK",     "opening_width_m": 25, "shutter_width_m": 8},
