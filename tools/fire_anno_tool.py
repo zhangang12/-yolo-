@@ -189,7 +189,7 @@ ORPHAN_GUIDANCE = {
         "      ③确实定位错 → 请人工核实"
     ),
     "WIDTH_LINE_ORPHAN": (
-        "width_dimension_line 两端 80px 内应有 fire_door/stair_escalator/gate（它在标这些实体的宽度）。\n"
+        "width_dimension_line 两端 80px 内应有 fire_door/stair_escalator/gate/safety_exit（它在标这些实体的宽度）。\n"
         "      处理：找到这条尺寸线在标谁的宽度，修正端点位置贴到对应实体上；或如果是误标就删掉。"
     ),
     "DIM_VAL_ORPHAN": (
@@ -507,8 +507,9 @@ def qc(path, dtype="auto"):
                         p = p.strip()
                         if p: safety_per_image[img_name].append(p)
             # P2 几何关系派生：按图收集，循环结束后做 ORPHAN 检查（含 text 用于定位）
+            # 包含 safety_exit：width_dimension_line 端点可能在标 safety_exit 的宽度
             if lab in ("val_text", "room_title", "fire_compartment", "fire_door",
-                       "stair_escalator", "gate", "width_dimension_line",
+                       "stair_escalator", "gate", "safety_exit", "width_dimension_line",
                        "dimension_val", "fire_clearance_line"):
                 tc = present.get("text_content", "")
                 geom_per_image[img_name][lab].append((pts if pts else [], tc))
@@ -550,8 +551,10 @@ def qc(path, dtype="auto"):
             xs = [p[0] for p in pts]; ys = [p[1] for p in pts]
             return ((min(xs), min(ys)), (max(xs), max(ys)))
         # 邻接对象（站厅层 width_dimension_line 端点要找的目标）
+        # 包含 safety_exit：规范 GB 50016 5.5.18 关心疏散门/疏散口的净宽，
+        # 标注员可能用 width_dimension_line 标 safety_exit 的宽度（这是合理用法）
         hall_anchors = []
-        for k in ("fire_door", "stair_escalator", "gate"):
+        for k in ("fire_door", "stair_escalator", "gate", "safety_exit"):
             for pts, _ in g.get(k, []):
                 b = _to_box(pts)
                 if b: hall_anchors.append(b)
@@ -610,7 +613,7 @@ def qc(path, dtype="auto"):
                                   if _min_dist_point_to_boxes(p, hall_anchors) > ORPHAN_NEAR_PX)
                 if orphan_ends == 2:
                     rep.add("WARN", "WIDTH_LINE_ORPHAN",
-                            f"[{base_nm}] width_dimension_line 两端 ({pts[0][0]:.0f},{pts[0][1]:.0f})-({pts[-1][0]:.0f},{pts[-1][1]:.0f}) >{ORPHAN_NEAR_PX}px 内都没有 fire_door/stair_escalator/gate — 请核实关联实体")
+                            f"[{base_nm}] width_dimension_line 两端 ({pts[0][0]:.0f},{pts[0][1]:.0f})-({pts[-1][0]:.0f},{pts[-1][1]:.0f}) >{ORPHAN_NEAR_PX}px 内都没有 fire_door/stair_escalator/gate/safety_exit — 请核实关联实体")
                     orphan_codes_seen.add("WIDTH_LINE_ORPHAN")
 
         # ④ dimension_val 框中心 <150px 内应有 fire_clearance_line（总平面）
