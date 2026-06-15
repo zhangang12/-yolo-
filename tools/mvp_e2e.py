@@ -23,6 +23,7 @@ import xml.etree.ElementTree as ET
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import anno_to_structured
 import rule_engine
+import scale_calibrate
 
 
 # ---------- 中文路径安全读写图 ----------
@@ -184,11 +185,26 @@ def annotate_failures(img, image_node, structured, findings, fail_only=True):
 
 # ---------- 主流程 ----------
 
-def run(xml_path, img_path, out_dir, scale=None, station_meta=None, rules_path=None):
+def run(xml_path, img_path, out_dir, scale=None, station_meta=None, rules_path=None,
+        pdf_path=None):
     rules_path = rules_path or os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                             "..", "rules", "rules.json")
     os.makedirs(out_dir, exist_ok=True)
     stem = os.path.splitext(os.path.basename(img_path))[0]
+
+    # 0) 比例尺标定 - 优先级:manual > pdf > review_required
+    print("[0/4] 比例尺标定 ...")
+    img_for_size = _imread(img_path)
+    jpg_size = (img_for_size.shape[1], img_for_size.shape[0]) if img_for_size is not None else None
+    scale, scale_info = scale_calibrate.resolve_scale(pdf=pdf_path, jpg_size=jpg_size, manual=scale)
+    if scale:
+        print(f"  ✅ scale = {scale:.6f} m/px  (source={scale_info['source']})")
+        if scale_info.get("primary_ratio"):
+            print(f"     PDF 比例 1:{scale_info['primary_ratio']}  "
+                  f"渲染 DPI≈{scale_info.get('rendered_dpi')}")
+    else:
+        print(f"  ⚠️ 未标定: {scale_info.get('warn') or scale_info.get('error')}")
+        print(f"     几何相关规则将走 review_required")
 
     # 1) adapter
     print("[1/4] CVAT 标注 → 结构化对象 ...")
@@ -268,11 +284,14 @@ def main():
     ap.add_argument("xml")
     ap.add_argument("img")
     ap.add_argument("out")
-    ap.add_argument("--scale", type=float, default=None)
+    ap.add_argument("--scale", type=float, default=None,
+                   help="手动 m/px,优先级最高")
+    ap.add_argument("--pdf", default=None,
+                   help="矢量 PDF 路径;从中自动读 1:N 比例 + 与 jpg 大小算 m/px")
     ap.add_argument("--station-meta", default=None)
     a = ap.parse_args()
     sm = json.load(open(a.station_meta, encoding="utf-8")) if a.station_meta else None
-    run(a.xml, a.img, a.out, scale=a.scale, station_meta=sm)
+    run(a.xml, a.img, a.out, scale=a.scale, station_meta=sm, pdf_path=a.pdf)
 
 
 if __name__ == "__main__":
