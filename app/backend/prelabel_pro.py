@@ -178,7 +178,15 @@ def region_candidates(draws, scale, Wp, Hp, cv2, np):
 def ocr_words(base_img, np):
     """整图 OCR 一次，返回 [(cx,cy,text)...]；无 tesseract 返回 None。"""
     try:
-        import pytesseract, io
+        import pytesseract, io, sys, os
+        # PATH 没设 tesseract 时自动探测常见安装目录
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                         "..", "..", "tools"))
+        try:
+            from tesseract_init import ensure_tesseract
+            ensure_tesseract()
+        except Exception:
+            pass
         from PIL import Image
         cfg = "--psm 11"
         capW = 2400
