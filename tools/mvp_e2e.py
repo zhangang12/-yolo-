@@ -29,7 +29,22 @@ import scale_calibrate
 # ---------- 中文路径安全读写图 ----------
 
 def _imread(path):
+    """中文路径安全读图;若 path 是 PDF 自动渲染第一页为内存 jpg 再解码。"""
     import cv2, numpy as np
+    if path.lower().endswith(".pdf"):
+        try:
+            import fitz
+        except ImportError:
+            raise RuntimeError("读 PDF 需要 pymupdf: pip install pymupdf")
+        doc = fitz.open(path)
+        pg = doc[0]
+        # 与训练时保持一致:200 DPI 渲染
+        pix = pg.get_pixmap(matrix=fitz.Matrix(200 / 72.0, 200 / 72.0))
+        arr = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, pix.n)
+        doc.close()
+        if pix.n == 4:
+            return cv2.cvtColor(arr, cv2.COLOR_RGBA2BGR)
+        return cv2.cvtColor(arr, cv2.COLOR_RGB2BGR)
     return cv2.imdecode(np.fromfile(path, dtype=np.uint8), cv2.IMREAD_COLOR)
 
 
