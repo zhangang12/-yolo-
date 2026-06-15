@@ -74,7 +74,34 @@ python app/main.py</code></pre>
   <li>纯 CPU 也能跑,只是训练慢 8-15 倍</li>
 </ul>
 
-<h3>1.2 主界面</h3>
+<h3 id="ocr-dep">1.2 系统级依赖 — Tesseract OCR <span class="badge orange">部分功能需要</span></h3>
+<p>Python 包(<code>requirements.txt</code>)装完<strong>还不够</strong>:OCR 是<strong>系统级程序</strong>,
+Python 只是调用它的封装。<strong>没装 tesseract 时</strong>,客户端"端到端预审"和"数据准备 → 预标注(勾选 OCR)"
+会报这个错:</p>
+<pre><code>❌ 未检测到 tesseract(OCR 引擎)。第①阶段读数字需要它。
+   安装:Windows 装 UB-Mannheim/tesseract 安装包并加入 PATH;
+        macOS `brew install tesseract`;Ubuntu `sudo apt install tesseract-ocr`。</code></pre>
+
+<table>
+<tr><th>系统</th><th>安装方式</th><th>中文识别附加</th></tr>
+<tr><td>Windows</td><td>从 <a href="https://github.com/UB-Mannheim/tesseract/wiki" target="_blank">UB-Mannheim/tesseract</a> 下载安装包,安装时把 PATH 勾上(或安装后手动把 <code>C:\Program Files\Tesseract-OCR</code> 加入系统 PATH)</td><td>安装时勾"Additional script data" → Chinese Simplified</td></tr>
+<tr><td>macOS</td><td><code>brew install tesseract</code></td><td><code>brew install tesseract-lang</code></td></tr>
+<tr><td>Ubuntu / Debian</td><td><code>sudo apt install tesseract-ocr</code></td><td><code>sudo apt install tesseract-ocr-chi-sim</code></td></tr>
+</table>
+
+<p><strong>验证安装成功</strong>:任意终端执行 <code>tesseract --version</code>,能输出版本号即可。客户端无需重启,
+下次点"开始预审"时会自动检测。</p>
+
+<div class="tip">
+<strong>什么时候必须装</strong>:
+<ul>
+  <li>✅ 端到端预审时,图纸<strong>没有矢量文字层</strong>(扫描件 / 老 PDF)— OCR 是唯一退路</li>
+  <li>✅ 数据准备 → 预标注勾"启用 OCR"做"机器先标"</li>
+  <li>❌ 矢量 PDF 端到端审查 — 文字层直读优先,不靠 OCR;不装也能跑(只是不读图上数字时降级为 review_required)</li>
+</ul>
+</div>
+
+<h3>1.3 主界面</h3>
 <p>左侧蓝色侧边栏:4 个导航按钮 — 数据准备 / 端到端预审 / 规则库 / YOLO 训练</p>
 <p>右侧大区域:当前选中页面的工作区,通常分两部分:</p>
 <ul>
@@ -261,6 +288,22 @@ gate=0.995 / vent_group_ground=0.98 / fire_door=0.92 / station_exit_ground=0.79;
 <h3>Q3. 训练页"首次会自动下载预训练权重",但下载卡住?</h3>
 <p>预训练权重 (yolo11s-seg.pt) 20MB 左右,从 GitHub 拉。
 网络不通时手动下载放项目根,客户端会优先用本地的。</p>
+
+<h3>Q4. 端到端预审报 "❌ 未检测到 tesseract(OCR 引擎)"?</h3>
+<p>Python 装的 <code>pytesseract</code> 只是封装,真正的 OCR 引擎是<strong>系统级程序</strong>需要单独装。
+最常见的 Windows 解决步骤:</p>
+<ol>
+  <li>下载 <a href="https://github.com/UB-Mannheim/tesseract/wiki" target="_blank">UB-Mannheim/tesseract</a> 安装包</li>
+  <li>安装时勾选 "Additional script data → Chinese Simplified"(中文图纸需要)</li>
+  <li>安装完后把 <code>C:\Program Files\Tesseract-OCR</code> 加入系统 PATH 环境变量</li>
+  <li>新开终端跑 <code>tesseract --version</code> 验证;有版本号即可</li>
+  <li>重启客户端 → 端到端预审会自动检测到</li>
+</ol>
+<p>macOS / Linux 安装命令见 <a href="#ocr-dep">§1.2 系统级依赖 — Tesseract OCR</a>。</p>
+
+<div class="tip">
+矢量 PDF 不一定需要装 — 文字层直读优先;只有<strong>无文字层时</strong>才必须有 tesseract。
+</div>
 
 <h3>Q4. 字体显示不全 / 中文乱码?</h3>
 <p>Windows 默认字体即可。Linux 需要装思源黑体或微软雅黑;
