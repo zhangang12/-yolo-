@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>YOLO 增量数据训练文档</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+         max-width: 1100px; margin: 24px auto; padding: 0 28px; color: #2c3e50;
+         line-height: 1.7; background: #fafbfc; }
+  h1 { color: #c0392b; border-bottom: 3px solid #c0392b; padding-bottom: 10px; }
+  h2 { color: #2980b9; margin-top: 36px; border-left: 5px solid #2980b9; padding-left: 12px; }
+  h3 { color: #27ae60; margin-top: 28px; }
+  h4 { color: #8e44ad; margin-top: 20px; }
+  code { background: #f4f6f8; padding: 2px 6px; border-radius: 3px;
+         font-family: "Consolas", "Monaco", monospace; color: #e74c3c; font-size: 13.5px; }
+  pre { background: #2c3e50; color: #ecf0f1; padding: 14px 18px; border-radius: 6px;
+        overflow-x: auto; font-size: 13.5px; line-height: 1.55; }
+  pre code { background: transparent; color: #ecf0f1; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; background: white; font-size: 14px; }
+  th, td { border: 1px solid #d5dbdb; padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: #34495e; color: white; font-weight: 600; }
+  tr:nth-child(even) td { background: #fbfcfd; }
+  .tip { background: #eafaf1; border-left: 4px solid #27ae60; padding: 10px 16px; margin: 14px 0; border-radius: 0 4px 4px 0; }
+  .warn { background: #fef5e7; border-left: 4px solid #e67e22; padding: 10px 16px; margin: 14px 0; border-radius: 0 4px 4px 0; }
+  .danger { background: #fdedec; border-left: 4px solid #e74c3c; padding: 10px 16px; margin: 14px 0; border-radius: 0 4px 4px 0; }
+  .toc { background: #ecf0f1; padding: 12px 22px; border-radius: 6px; margin: 18px 0 28px; }
+  .toc ol { margin: 6px 0; padding-left: 22px; }
+  .toc a { color: #2980b9; text-decoration: none; }
+  .badge { display: inline-block; padding: 1px 9px; border-radius: 10px; font-size: 12px; font-weight: 600; color: white; margin-right: 4px; }
+  .badge.green { background: #27ae60; }
+  .badge.red { background: #e74c3c; }
+  .badge.blue { background: #2980b9; }
+  .badge.orange { background: #e67e22; }
+  hr { border: none; border-top: 1px dashed #bdc3c7; margin: 30px 0; }
+  .ascii { background: #f4f6f8; padding: 10px 18px; border-radius: 4px;
+           font-family: "Consolas", monospace; white-space: pre; font-size: 13px;
+           color: #2c3e50; line-height: 1.4; }
+  .metric { display: inline-block; padding: 4px 12px; background: #ecf0f1;
+            border-radius: 3px; font-weight: 600; margin: 2px; font-size: 13px; }
+  .metric.good { background: #d4efdf; color: #196f3d; }
+  .metric.weak { background: #fadbd8; color: #922b21; }
+  .metric.warn { background: #fdebd0; color: #9c640c; }
+  kbd { background: #34495e; color: white; padding: 1px 7px; border-radius: 3px;
+        font-size: 12px; font-family: "Consolas", monospace; }
+</style>
+</head>
+<body>
+
+<h1>🎯 YOLO 增量数据训练文档</h1>
+
+<p>本文档面向<strong>项目维护者</strong>:当新一批站点完成标注后,如何把它增量喂给模型,
+持续提升识别精度。基于本项目 2026-06 真实跑通的流程。</p>
+
+<div class="toc">
+<strong>目录</strong>
+<ol>
+  <li><a href="#baseline">当前基线模型(从这里开始)</a></li>
+  <li><a href="#strategy">增量训练策略:从已有权重继续 vs 全量重训</a></li>
+  <li><a href="#data">增量数据准备(标注 → 数据集)</a></li>
+  <li><a href="#train">增量训练命令</a></li>
+  <li><a href="#eval">评估与回归测试</a></li>
+  <li><a href="#deploy">发布:用新权重替换旧的</a></li>
+  <li><a href="#schema">扩类别(改 CLASS_NAMES)的特殊注意</a></li>
+  <li><a href="#cycle">主动学习循环(模型找错 → 人工补难例 → 重训)</a></li>
+  <li><a href="#troubleshoot">常见问题</a></li>
+</ol>
+</div>
+
+<h2 id="baseline">1. 当前基线模型(从这里开始)</h2>
+
+<h3>1.1 基线权重</h3>
+<table>
+<tr><th>位置</th><th>说明</th></tr>
+<tr><td><code>runs/segment/runs/fire_seg_gpu/weights/best.pt</code></td><td>2026-06 训练产物(81 MB)</td></tr>
+<tr><td>架构</td><td>yolo11s-seg(small,16 类)</td></tr>
+<tr><td>训练数据</td><td>18 张图(9 站厅 + 9 总平面),切片后 349 个 1024×1024 瓦片</td></tr>
+<tr><td>训练参数</td><td>imgsz=1024, batch=4, epochs=50(实际 37 epoch 停),--no-amp, --workers 0</td></tr>
+<tr><td>硬件</td><td>RTX 5060 8GB</td></tr>
+</table>
+
+<h3>1.2 基线指标(可作为后续对照)</h3>
+<p>整体:<span class="metric">Box mAP50 = <strong>0.491</strong></span>
+<span class="metric">Mask mAP50 = <strong>0.481</strong></span></p>
+
+<table>
+<tr><th>类别</th><th>val 实例</th><th>Box mAP50</th><th>评价</th></tr>
+<tr><td>gate</td><td>5</td><td><span class="metric good">0.995</span></td><td>🟢 几近完美</td></tr>
+<tr><td>vent_group_ground</td><td>17</td><td><span class="metric good">0.980</span></td><td>🟢 优秀</td></tr>
+<tr><td>fire_door</td><td>64</td><td><span class="metric good">0.924</span></td><td>🟢 优秀(实例最多)</td></tr>
+<tr><td>station_exit_ground</td><td>12</td><td><span class="metric good">0.786</span></td><td>🟢 良好</td></tr>
+<tr><td>stair_escalator</td><td>28</td><td><span class="metric good">0.692</span></td><td>🟢 良好</td></tr>
+<tr><td>surrounding_building</td><td>23</td><td><span class="metric warn">0.604</span></td><td>🟡 可用</td></tr>
+<tr><td>fire_compartment</td><td>23</td><td><span class="metric warn">0.410</span></td><td>🟡 偏低(分区大,IoU 难)</td></tr>
+<tr><td>room_title</td><td>9</td><td><span class="metric warn">0.299</span></td><td>🟡 数据少</td></tr>
+<tr><td>safety_exit</td><td>4</td><td><span class="metric weak">0</span></td><td>⚠️ val 4 实例,采样误差大</td></tr>
+<tr><td>commercial_shop</td><td>1</td><td><span class="metric weak">0</span></td><td>⚠️ val 1 实例</td></tr>
+<tr><td>draft_curtain</td><td>2</td><td><span class="metric weak">0</span></td><td>⚠️ val 2 实例</td></tr>
+<tr><td>fire_shutter</td><td>0</td><td>—</td><td>⚠️ val 集没分到</td></tr>
+</table>
+
+<h3>1.3 "应该重点补"的类别</h3>
+<p>训练集实例 < 100 的类(基于 18 张图统计):</p>
+<table>
+<tr><th>类别</th><th>训练实例</th><th>建议目标</th><th>需要新标多少?</th></tr>
+<tr><td>safety_exit</td><td>52</td><td>≥ 150</td><td>15-20 站</td></tr>
+<tr><td>gate</td><td>77</td><td>≥ 150</td><td>10-15 站</td></tr>
+<tr><td>commercial_shop</td><td>12</td><td>≥ 150</td><td>20+ 站(商铺少见)</td></tr>
+<tr><td>draft_curtain</td><td>19</td><td>≥ 150</td><td>20+ 站</td></tr>
+<tr><td>fire_shutter</td><td>10</td><td>≥ 150</td><td>20+ 站</td></tr>
+<tr><td>dimension_val</td><td>8</td><td>≥ 150</td><td>取决于是否需要(可程序代抽)</td></tr>
+</table>
+
+<hr>
+
+<h2 id="strategy">2. 增量训练策略</h2>
+
+<h3>2.1 两种主流策略对比</h3>
+<table>
+<tr><th>策略</th><th>命令</th><th>时间</th><th>适用</th></tr>
+<tr><td><strong>A. 从已有 best.pt 继续训</strong><br><span class="badge green">推荐增量场景</span></td>
+    <td><code>--model best.pt</code></td>
+    <td>短(20-40% 全量时间)</td>
+    <td>新数据 < 旧数据 50% / 类别不变 / 想快速验证</td></tr>
+<tr><td><strong>B. 从预训练权重全量重训</strong></td>
+    <td><code>--model yolo11s-seg.pt</code></td>
+    <td>长(完整 50-100 epoch)</td>
+    <td>新数据 >= 旧数据 50% / 加新类别 / 改 CLASS_NAMES / 定期"刷新"</td></tr>
+</table>
+
+<div class="tip">
+<strong>推荐节奏</strong>:每收到 2-3 个新站标注就用 A 增量训一次(快速反馈);
+每攒到 8-10 个新站后做一次 B 全量重训(避免增量训漂移)。
+</div>
+
+<h3>2.2 策略 A 工作机制</h3>
+<div class="ascii">已有 best.pt (37 epoch,18 张图训出)
+       ↓
+   加载权重 (Transferred 555/561 items from pretrained weights)
+       ↓
+       新+旧合并的全量数据集 (重新切片)
+       ↓
+   再训 30-50 epoch
+       ↓
+   产出 best_v2.pt (mAP 期望 ↑)</div>
+
+<div class="warn">
+<strong>易踩坑</strong>:策略 A 必须把新数据和旧数据<strong>合并到一个目录</strong>再 build_dataset。
+单跑新数据会导致模型"灾难性遗忘"旧站点。
+</div>
+
+<hr>
+
+<h2 id="data">3. 增量数据准备</h2>
+
+<h3>3.1 标准目录结构(推荐)</h3>
+<p>把所有批次的标注合并放到一个根目录:</p>
+<pre><code>data/anno_all/
+├── images/                       ← 所有底图放一起
+│   ├── 嘉宾站站厅.jpg               (老批次)
+│   ├── 嘉宾站总平面.jpg
+│   ├── ...
+│   └── 新A站站厅.jpg                (新批次)
+├── batch_20260610_hall.xml      ← 老批次 CVAT XML
+├── batch_20260610_site.xml
+└── batch_20260715_new_hall.xml  ← 新批次</code></pre>
+
+<p><strong>关键</strong>:<code>build_dataset.py</code> 用 <code>glob(*.xml)</code> 扫描所有 XML,
+自动遍历每个 <code>&lt;image&gt;</code> 并去 <code>images/</code> 找对应底图。
+所以 XML 文件可以多个共存,底图全在一个 <code>images/</code> 下。</p>
+
+<h3>3.2 把新批次合并进来(具体步骤)</h3>
+
+<h4>① 解压 CVAT 导出的 zip</h4>
+<pre><code># CVAT 1.1 标准结构: images/default/*.jpg + annotations.xml
+unzip 新批次_站厅层.zip -d ./temp_new/</code></pre>
+
+<h4>② 把图复制到 anno_all/images/</h4>
+<pre><code># Python(中文路径安全)
+python -c "
+import os, shutil
+src = './temp_new/images/default'
+dst = './data/anno_all/images'
+os.makedirs(dst, exist_ok=True)
+for f in os.listdir(src):
+    s = os.path.join(src, f)
+    if os.path.isfile(s):
+        shutil.copy(s, os.path.join(dst, f))
+"</code></pre>
+
+<h4>③ 把 XML 重命名后复制</h4>
+<pre><code>cp ./temp_new/annotations.xml ./data/anno_all/batch_$(date +%Y%m%d)_hall.xml</code></pre>
+
+<h4>④ 跑质检确认新批次干净</h4>
+<pre><code># 单独跑新批次的 QC
+python tools/fire_anno_tool.py qc ./data/anno_all/batch_20260715_new_hall.xml --type hall</code></pre>
+<p><strong>ERROR 数必须 = 0 才能进训练集</strong>,否则会污染整批数据。</p>
+
+<h3>3.3 重建 YOLO 数据集</h3>
+<pre><code>python app/backend/build_dataset.py  \
+    ./data/anno_all/  \
+    ./yolo_work/dataset_v2/  \
+    --tile 1024 --overlap 128 --seed 0</code></pre>
+
+<p>关注产出报告里的"各类实例数":</p>
+<ul>
+  <li><strong>每类 ≥ 150</strong>(基线):mAP 应该可用</li>
+  <li>30-149:可训但效果一般</li>
+  <li>< 30:大概率 mAP 接近 0,等于没训</li>
+</ul>
+
+<hr>
+
+<h2 id="train">4. 增量训练命令</h2>
+
+<h3>4.1 策略 A:从 best.pt 继续训 <span class="badge green">默认</span></h3>
+<pre><code>python app/backend/train_yolo.py  train  \
+    ./yolo_work/dataset_v2/data.yaml  \
+    --model ./yolo_work/runs/segment/runs/fire_seg_gpu/weights/best.pt  \
+    --epochs 30 \
+    --imgsz 1024 --batch 4 --patience 8  \
+    --workers 0 --no-amp --device 0  \
+    --project ./yolo_work/runs --name fire_seg_v2</code></pre>
+
+<p>关键点:</p>
+<ul>
+  <li><code>--model</code> 指向<strong>已有 best.pt</strong>(不是 yolo11s-seg.pt)</li>
+  <li><code>--epochs 30</code>:增量训不用 100 轮,30-50 够;<code>--patience 8</code>早停</li>
+  <li><code>--name fire_seg_v2</code>:不要覆盖 v1,保留对比</li>
+</ul>
+
+<h3>4.2 策略 B:从预训练权重全量重训</h3>
+<pre><code>python app/backend/train_yolo.py  train  \
+    ./yolo_work/dataset_v2/data.yaml  \
+    --model yolo11s-seg.pt  \
+    --epochs 100 --imgsz 1024 --batch 4 --patience 20  \
+    --workers 0 --no-amp --device 0  \
+    --project ./yolo_work/runs --name fire_seg_v2_full</code></pre>
+
+<h3>4.3 参数选择速查</h3>
+<table>
+<tr><th>硬件</th><th>--model</th><th>--imgsz</th><th>--batch</th><th>预估 50ep 时间</th></tr>
+<tr><td>RTX 5060 / 8GB</td><td>yolo11s-seg.pt</td><td>1024</td><td>4(关 AMP) / 8(开 AMP)</td><td>20-40 min</td></tr>
+<tr><td>RTX 4090 / 24GB</td><td>yolo11m-seg.pt</td><td>1024</td><td>16</td><td>10-15 min</td></tr>
+<tr><td>RTX 3060 / 12GB</td><td>yolo11s-seg.pt</td><td>1024</td><td>8</td><td>30-60 min</td></tr>
+<tr><td>CPU(任何)</td><td>yolo11n-seg.pt</td><td>640</td><td>2</td><td>4-12 小时</td></tr>
+</table>
+
+<div class="warn">
+<strong>RTX 50 系(Blackwell sm_120)必加</strong><br>
+<code>--no-amp</code>(避 cudaErrorUnknown) +
+<code>--workers 0</code>(避 Windows 多进程共享内存崩溃) +
+<code>--batch 4</code>(关 AMP 后显存翻倍)。否则训到一半挂。
+</div>
+
+<hr>
+
+<h2 id="eval">5. 评估与回归测试</h2>
+
+<h3>5.1 跑 val</h3>
+<pre><code>python app/backend/train_yolo.py  val  \
+    ./yolo_work/dataset_v2/data.yaml  \
+    --weights ./yolo_work/runs/segment/runs/fire_seg_v2/weights/best.pt  \
+    --imgsz 1024</code></pre>
+
+<h3>5.2 对照基线指标</h3>
+<p>把 v2 各类 mAP 和上面 §1.2 的基线表逐项对比:</p>
+<ul>
+  <li>✅ 数据量大的类(fire_door / vent / gate)mAP 应 <strong>不降</strong>(±2% 内正常)</li>
+  <li>🎯 之前 mAP=0 的类(safety_exit / commercial_shop)应 <strong>显著上升</strong>(到 0.3-0.7)</li>
+  <li>⚠️ 全面下降:可能新数据有问题(质检漏检) → 单独 build 新批次跑一次 train 看哪类崩</li>
+</ul>
+
+<h3>5.3 视觉对比(强烈推荐)</h3>
+<p>同一张图,两个模型分别推理,人眼对比:</p>
+<pre><code># 用 v1 模型
+python tools/sahi_predict.py  ./old/best.pt  test_img.jpg  --out ./pred_v1/
+
+# 用 v2 模型
+python tools/sahi_predict.py  ./new/best.pt  test_img.jpg  --out ./pred_v2/
+
+# 打开两张 _pred.jpg 并排看</code></pre>
+
+<h3>5.4 端到端回归测试</h3>
+<p>训完新模型后,把 <code>mvp_e2e.py</code> 跑一遍样例数据,确保下游链路不崩:</p>
+<pre><code>python tools/mvp_e2e.py  示例.xml  示例.jpg  /tmp/regression_v2/  --pdf 示例.pdf
+# 看 _report.md 中违规清单数量、类型,与 v1 对比应该有<strong>变化但不混乱</strong></code></pre>
+
+<hr>
+
+<h2 id="deploy">6. 发布:用新权重替换旧的</h2>
+
+<h3>6.1 备份旧权重</h3>
+<pre><code># 备份 v1 为 _v1.pt(永久保留)
+cp ./yolo_work/runs/segment/runs/fire_seg_gpu/weights/best.pt  \
+   ./yolo_work/weights_archive/best_v1_20260615.pt</code></pre>
+
+<h3>6.2 更新生产权重路径</h3>
+<p>本项目目前生产权重路径硬编码在测试脚本中。在客户端 / SAHI / e2e 里,
+统一指向 <strong>同一个软链或副本</strong> 即可:</p>
+<pre><code># 推荐做法:维护一个稳定路径 best_prod.pt
+cp ./yolo_work/runs/segment/runs/fire_seg_v2/weights/best.pt  \
+   ./yolo_work/best_prod.pt</code></pre>
+
+<h3>6.3 客户端"YOLO 训练 → 评估"页测试</h3>
+<p>把 v2 best.pt 喂给客户端的评估页跑一遍,看混淆矩阵图。
+若各类 mAP 持平或上升 → 发布;否则回滚到 v1。</p>
+
+<hr>
+
+<h2 id="schema">7. 扩类别(改 CLASS_NAMES)的特殊注意</h2>
+
+<p>如果新批次包含<strong>原 CLASS_NAMES 没有的新类</strong>(如未来加 <code>elevator</code>),
+处理路径:</p>
+
+<h3>7.1 改 build_dataset.py</h3>
+<pre><code># app/backend/build_dataset.py 第 30 行附近
+CLASS_NAMES = [
+    "fire_compartment", "commercial_shop", ...,  # 旧 16 个保持不变
+    "safety_exit", "gate", "fire_shutter",
+    "elevator",   # ← 追加到末尾,绝对不要插入中间
+]</code></pre>
+
+<div class="danger">
+<strong>❌ 绝对不要做的</strong>:重排或删除 CLASS_NAMES 现有元素 — 这会让<strong>旧权重失效</strong>,
+所有训过的类别 ID 全错位。新类只能<strong>追加到末尾</strong>。
+</div>
+
+<h3>7.2 同时改 fire_anno_tool.py 的 LABELS</h3>
+<p>给新标签加 schema 定义(geom / group / attrs / required),
+否则质检会报 BAD_LABEL。同步改 <code>rules/cvat_labels.json</code> 让 CVAT 模板锁死下拉。</p>
+
+<h3>7.3 必须策略 B 全量重训</h3>
+<p>新类必须从 yolo11s-seg.pt 重头训(策略 A 的 best.pt 不认识新类 ID)。</p>
+
+<hr>
+
+<h2 id="cycle">8. 主动学习循环(进阶推荐)</h2>
+
+<p>YOLO 训练的"圣杯"流程 — 让模型自己暴露弱点,人工只补难例:</p>
+
+<div class="ascii">┌────────────────────────────────────────────────────────────┐
+│  ① 用当前 best.pt 在【未标注的新站图】上 sahi_predict     │
+│         ↓                                                  │
+│  ② 看 conf 在 [0.25, 0.5] 区间的"低置信"预测              │
+│     这些是模型"拿不准"的样本,正是要补的难例              │
+│         ↓                                                  │
+│  ③ 人工在 CVAT 复审、修正、确认(比从零标快 5×)         │
+│         ↓                                                  │
+│  ④ 加入训练集,策略 A 再训 30 epoch                       │
+│         ↓                                                  │
+│  ⑤ 评估 → 弱点缩小 → 循环回 ①                             │
+└────────────────────────────────────────────────────────────┘</div>
+
+<p>每轮循环:</p>
+<ul>
+  <li>新增 30-50 张图(2-3 个站)</li>
+  <li>训练 30-40 min(策略 A)</li>
+  <li>mAP 期望 +2~5%(数据少的类提升最大)</li>
+</ul>
+
+<hr>
+
+<h2 id="troubleshoot">9. 常见问题</h2>
+
+<h3>Q1. 训到一半 RuntimeError: Couldn't open shared file mapping</h3>
+<p>Windows + 中文路径 + DataLoader 多 workers 触发。加 <code>--workers 0</code> 即可。</p>
+
+<h3>Q2. CUDA error: unknown error(RTX 50 系)</h3>
+<p>Blackwell sm_120 + AMP 偶发。加 <code>--no-amp</code> + <code>--batch 4</code>。</p>
+
+<h3>Q3. 训完 mAP 大幅下降</h3>
+<p>检查新批次质检报告:</p>
+<ol>
+  <li>标签是否在 schema 内(非法标签会被 build_dataset 跳过 → 训练丢实例)</li>
+  <li>每类实例数是否突变(看 build_dataset 报告)</li>
+  <li>底图分辨率是否一致(差距大需要调 tile 大小)</li>
+  <li>val 集划分:固定 <code>--seed 0</code> 才能跨版本对比</li>
+</ol>
+
+<h3>Q4. 训练 OOM(显存不够)</h3>
+<p>降参数:<code>--batch 2 --imgsz 768</code>。或换更小模型 <code>yolo11n-seg.pt</code>。</p>
+
+<h3>Q5. 新加的类训完 mAP 还是 0</h3>
+<ol>
+  <li>检查训练实例数:< 30 几乎不可能学会</li>
+  <li>检查 CLASS_NAMES 是否真的追加成功(看 data.yaml 里的 nc / names)</li>
+  <li>检查 build_dataset 报告里的"各类实例数"</li>
+</ol>
+
+<h3>Q6. 训练日志显示 "Transferred N/M items from pretrained weights"</h3>
+<p>正常 — 它表示从预训练权重迁移了 N 个层的权重,M-N 个层因为类别数变化需要重新初始化。
+N/M 比例 > 90% 都正常。</p>
+
+<h3>Q7. 同一份数据 + 同样参数,两次跑 mAP 差别大</h3>
+<p>固定随机种子:<code>--seed 0</code>(build_dataset 也要传)。
+val 集每次划分不同 = mAP 不可比。</p>
+
+<hr>
+
+<h2 id="cheatsheet">附:增量训练 Cheatsheet</h2>
+
+<pre><code># 完整一轮增量训练(30 分钟)
+# 假设新批次解压到 ./new_batch/,旧数据已在 ./data/anno_all/
+
+# 1. 合并新批次到 anno_all
+python -c "
+import os, shutil
+for f in os.listdir('./new_batch/images/default'):
+    shutil.copy(os.path.join('./new_batch/images/default', f), './data/anno_all/images/')
+shutil.copy('./new_batch/annotations.xml', './data/anno_all/batch_$(date +%Y%m%d).xml')
+"
+
+# 2. 质检(ERROR 必须 = 0)
+python tools/fire_anno_tool.py qc ./data/anno_all/batch_$(date +%Y%m%d).xml
+
+# 3. 重建数据集
+python app/backend/build_dataset.py  \
+    ./data/anno_all/  ./yolo_work/dataset_v2/  \
+    --tile 1024 --overlap 128 --seed 0
+
+# 4. 策略 A 增量训练
+python app/backend/train_yolo.py train  \
+    ./yolo_work/dataset_v2/data.yaml  \
+    --model ./yolo_work/best_prod.pt  \
+    --epochs 30 --imgsz 1024 --batch 4 --patience 8  \
+    --workers 0 --no-amp --device 0  \
+    --project ./yolo_work/runs --name fire_seg_$(date +%Y%m%d)
+
+# 5. 评估
+python app/backend/train_yolo.py val  \
+    ./yolo_work/dataset_v2/data.yaml  \
+    --weights ./yolo_work/runs/segment/runs/fire_seg_$(date +%Y%m%d)/weights/best.pt
+
+# 6. 与基线对比 → 决定是否发布
+# 7. 发布:cp best.pt → ./yolo_work/best_prod.pt</code></pre>
+
+<hr>
+
+<p style="text-align: center; color: #95a5a6; font-size: 13px; margin-top: 50px;">
+基于 2026-06 实测流程编写 &nbsp;|&nbsp; 配套权重:fire_seg_gpu/best.pt &nbsp;|&nbsp; 文档版本:2026-06
+</p>
+
+</body>
+</html>

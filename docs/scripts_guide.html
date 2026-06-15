@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>消防图纸 AI 预审 · 脚本使用文档</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+         max-width: 1100px; margin: 24px auto; padding: 0 28px; color: #2c3e50;
+         line-height: 1.7; background: #fafbfc; }
+  h1 { color: #c0392b; border-bottom: 3px solid #c0392b; padding-bottom: 10px; }
+  h2 { color: #2980b9; margin-top: 36px; border-left: 5px solid #2980b9; padding-left: 12px; }
+  h3 { color: #27ae60; margin-top: 28px; }
+  h4 { color: #8e44ad; margin-top: 20px; }
+  code { background: #f4f6f8; padding: 2px 6px; border-radius: 3px;
+         font-family: "Consolas", "Monaco", monospace; color: #e74c3c; font-size: 13.5px; }
+  pre { background: #2c3e50; color: #ecf0f1; padding: 14px 18px; border-radius: 6px;
+        overflow-x: auto; font-size: 13.5px; line-height: 1.55; }
+  pre code { background: transparent; color: #ecf0f1; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; background: white; font-size: 14px; }
+  th, td { border: 1px solid #d5dbdb; padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: #34495e; color: white; font-weight: 600; }
+  tr:nth-child(even) td { background: #fbfcfd; }
+  .tip { background: #eafaf1; border-left: 4px solid #27ae60; padding: 10px 16px; margin: 14px 0; border-radius: 0 4px 4px 0; }
+  .warn { background: #fef5e7; border-left: 4px solid #e67e22; padding: 10px 16px; margin: 14px 0; border-radius: 0 4px 4px 0; }
+  .danger { background: #fdedec; border-left: 4px solid #e74c3c; padding: 10px 16px; margin: 14px 0; border-radius: 0 4px 4px 0; }
+  .toc { background: #ecf0f1; padding: 12px 22px; border-radius: 6px; margin: 18px 0 28px; }
+  .toc ol { margin: 6px 0; padding-left: 22px; }
+  .toc a { color: #2980b9; text-decoration: none; }
+  .badge { display: inline-block; padding: 1px 9px; border-radius: 10px; font-size: 12px; font-weight: 600; color: white; margin-right: 4px; }
+  .badge.green { background: #27ae60; }
+  .badge.blue  { background: #2980b9; }
+  .badge.purple { background: #8e44ad; }
+  .badge.orange { background: #e67e22; }
+  .badge.new { background: #e74c3c; }
+  hr { border: none; border-top: 1px dashed #bdc3c7; margin: 30px 0; }
+  .flow { background: #fff; border: 1px solid #d5dbdb; padding: 14px 20px; border-radius: 6px; margin: 14px 0; }
+  .flow-step { padding: 6px 12px; background: #2980b9; color: white; border-radius: 4px;
+               display: inline-block; margin: 4px; font-size: 13px; }
+  .flow-arrow { color: #7f8c8d; font-size: 18px; padding: 0 4px; }
+</style>
+</head>
+<body>
+
+<h1>🔧 消防图纸 AI 预审 · 脚本使用文档</h1>
+
+<p>本文档面向<strong>开发者 / 进阶用户</strong>。客户端只是 GUI 外壳,所有真实能力都在 <code>tools/</code> 与
+<code>app/backend/</code> 的命令行脚本里。本文按"工作流"组织,先看大图,再看每个脚本。</p>
+
+<div class="toc">
+<strong>目录</strong>
+<ol>
+  <li><a href="#overview">脚本总览 + 端到端工作流</a></li>
+  <li><a href="#anno">标注阶段:fire_anno_tool / prelabel_pro</a></li>
+  <li><a href="#geom">几何与结构化:geom_measure / scale_calibrate / anno_to_structured</a> <span class="badge new">2026-06</span></li>
+  <li><a href="#rule">规则引擎:rule_engine</a></li>
+  <li><a href="#e2e">端到端:mvp_e2e / mvp_batch / e2e_demo / fangju_demo</a></li>
+  <li><a href="#yolo">YOLO 训练:build_dataset / train_yolo / sahi_predict</a></li>
+  <li><a href="#report">报告导出:report_docx</a></li>
+  <li><a href="#vector">矢量层直读:vector_extract</a></li>
+</ol>
+</div>
+
+<h2 id="overview">1. 脚本总览 + 端到端工作流</h2>
+
+<h3>1.1 全景图</h3>
+<div class="flow">
+<span class="flow-step">CVAT 标注 + 底图</span>
+<span class="flow-arrow">→</span>
+<span class="flow-step">scale_calibrate</span>
+<span class="flow-arrow">→</span>
+<span class="flow-step">anno_to_structured</span>
+<span class="flow-arrow">→</span>
+<span class="flow-step">rule_engine</span>
+<span class="flow-arrow">→</span>
+<span class="flow-step">mvp_e2e 标注图 + 报告</span>
+</div>
+
+<p><strong>一条命令贯通(MVP 端到端)</strong>:</p>
+<pre><code>python tools/mvp_e2e.py annotations.xml 底图.jpg 输出目录 --pdf 矢量.pdf</code></pre>
+
+<h3>1.2 脚本一览表</h3>
+<table>
+<tr><th>脚本</th><th>作用</th><th>子命令</th></tr>
+<tr><td><code>tools/fire_anno_tool.py</code></td><td>标注四件套</td><td>convert / qc / prelabel / all / export-cvat-labels</td></tr>
+<tr><td><code>app/backend/prelabel_pro.py</code></td><td>增强预标注(语义细分+OCR+确认清单)</td><td>(单一入口)</td></tr>
+<tr><td><code>tools/vector_extract.py</code></td><td>矢量 PDF 文字层直读防火分区面积</td><td>(单一入口)</td></tr>
+<tr><td><code>tools/scale_calibrate.py</code> <span class="badge new">新</span></td><td>从矢量 PDF 自动算 m/px</td><td>(单一入口)</td></tr>
+<tr><td><code>tools/geom_measure.py</code> <span class="badge new">新</span></td><td>比例尺标定 / 面积 / 净宽 / 距离</td><td>(单一入口)</td></tr>
+<tr><td><code>tools/anno_to_structured.py</code> <span class="badge new">新</span></td><td>CVAT → 规则引擎结构化对象(MVP 中枢)</td><td>(单一入口)</td></tr>
+<tr><td><code>tools/rule_engine.py</code></td><td>规则引擎(读 rules.json 评估结构化数据)</td><td>--dry-run / --data</td></tr>
+<tr><td><code>tools/sahi_predict.py</code> <span class="badge new">新</span></td><td>切片推理(SAHI 风格),大图小目标</td><td>(单一入口)</td></tr>
+<tr><td><code>tools/mvp_e2e.py</code> <span class="badge new">新</span></td><td>端到端一条命令</td><td>(单一入口)</td></tr>
+<tr><td><code>tools/mvp_batch.py</code> <span class="badge new">新</span></td><td>批量端到端(整目录)</td><td>(单一入口)</td></tr>
+<tr><td><code>tools/e2e_demo.py</code></td><td>旧版 PDF 端到端(基于 vector_extract)</td><td>(单一入口)</td></tr>
+<tr><td><code>tools/fangju_demo.py</code></td><td>防火间距比对(总平面图专用)</td><td>(单一入口)</td></tr>
+<tr><td><code>tools/report_docx.py</code></td><td>导出 Word 审查报告</td><td>(单一入口)</td></tr>
+<tr><td><code>app/backend/build_dataset.py</code></td><td>CVAT → YOLO-seg 数据集</td><td>(单一入口)</td></tr>
+<tr><td><code>app/backend/train_yolo.py</code></td><td>YOLO 训练 / 评估</td><td>train / val</td></tr>
+</table>
+
+<div class="tip">
+所有脚本都用 <code>argparse</code>,加 <code>-h</code> 看完整参数。下面只列常用的。
+</div>
+
+<hr>
+
+<h2 id="anno">2. 标注阶段</h2>
+
+<h3>2.1 fire_anno_tool.py <span class="badge blue">5 个子命令</span></h3>
+
+<h4>convert — 中文标签转英文</h4>
+<pre><code># 带"漏转自检",未在 MAPPING 里的中文标签会报警
+python tools/fire_anno_tool.py convert  标注.xml  [输出.xml]</code></pre>
+
+<h4>qc — 标注质检</h4>
+<pre><code># 自动判图纸类型
+python tools/fire_anno_tool.py qc  标注.xml
+
+# 强制指定
+python tools/fire_anno_tool.py qc  标注.xml  --type hall   # 或 site / auto</code></pre>
+<p>分级输出:🔴 ERROR(阻断交付) / 🟠 WARN(可用需修) / 🔵 INFO(提示)。<strong>ERROR=0 才合格</strong>。</p>
+
+<h4>prelabel — 基础版矢量预标注</h4>
+<pre><code>python tools/fire_anno_tool.py prelabel  图纸.pdf  输出目录  --page 0 --dpi 200</code></pre>
+
+<h4>all — 一条龙(convert + qc)</h4>
+<pre><code>python tools/fire_anno_tool.py all  标注.xml</code></pre>
+
+<h4>export-cvat-labels — 导出 CVAT 项目模板 <span class="badge new">新</span></h4>
+<pre><code># 从 SCHEMA(LABELS+ENUMS)自动生成 CVAT 可导入的 labels.json
+python tools/fire_anno_tool.py export-cvat-labels  rules/cvat_labels.json</code></pre>
+<p>标注公司在 CVAT 项目设置 → Labels → 切到 Raw → 粘贴此文件 → Save。
+之后前端只能从下拉菜单选,根除错名标签。具体见 <code>docs/cvat_template_setup.md</code>。</p>
+
+<h3>2.2 prelabel_pro.py <span class="badge purple">增强版</span></h3>
+<pre><code># 语义细分 + 内容(OCR) + 置信度分级 + 确认清单 + 自检
+python app/backend/prelabel_pro.py  矢量图纸.pdf  输出目录  \
+    --type hall  --ocr  --qc</code></pre>
+
+<hr>
+
+<h2 id="geom">3. 几何与结构化(2026-06 新工具)</h2>
+
+<h3>3.1 scale_calibrate.py — 比例尺自动标定</h3>
+<p><strong>原理</strong>:打开 PDF 第一页 → 矢量文字层 grep <code>1:N</code> → 用 PDF 物理 pt 大小 + jpg 像素大小 → 算 m/px。</p>
+<pre><code># 单独运行(出 m/pt;给 --jpg-size 才出 m/px)
+python tools/scale_calibrate.py  图纸.pdf  --jpg-size 9395 3339</code></pre>
+<p><strong>典型输出</strong>:</p>
+<pre><code>{
+  "source": "pdf_vector_text",
+  "pdf_size_pt": [3382.0, 1202.0],
+  "primary_ratio": 200,
+  "ratio_freq": {"200": 2, "800": 1},
+  "rendered_dpi": 200,
+  "m_per_px": 0.025398
+}</code></pre>
+<p><strong>常见比例 → m/px</strong>(@ 200 DPI 渲染):</p>
+<table>
+<tr><th>PDF 比例</th><th>用途</th><th>m/px @ 200DPI</th></tr>
+<tr><td>1:150</td><td>详细站厅(少见)</td><td>0.0191</td></tr>
+<tr><td>1:200</td><td>站厅层平面图(主)</td><td>0.0254</td></tr>
+<tr><td>1:500</td><td>总平面图(主)</td><td>0.0635</td></tr>
+<tr><td>1:1000</td><td>区域示意</td><td>0.1270</td></tr>
+</table>
+
+<h3>3.2 geom_measure.py — 几何量测</h3>
+<pre><code># 自动标定(标注有 dimension_val + polyline)
+python tools/geom_measure.py  标注.xml  --out measure.json
+
+# 手动 scale
+python tools/geom_measure.py  标注.xml  --scale 0.0254  --out measure.json</code></pre>
+<p><strong>核心 API</strong>(可 import):</p>
+<table>
+<tr><th>函数</th><th>用途</th></tr>
+<tr><td><code>polygon_area_m2(pts, scale)</code></td><td>Shoelace 多边形面积 × scale²</td></tr>
+<tr><td><code>polyline_length_m(pts, scale)</code></td><td>折线累计长度 × scale</td></tr>
+<tr><td><code>door_net_width_m(pts, scale)</code></td><td>洞口宽 − 0.15 = 门净宽</td></tr>
+<tr><td><code>corridor_clear_width_m(pts, scale)</code></td><td>通道/楼梯净宽 = 线长 × scale</td></tr>
+<tr><td><code>associate_width_lines(shapes)</code></td><td>width_line 关联最近的 fire_door / stair / gate</td></tr>
+</table>
+
+<h3>3.3 anno_to_structured.py — MVP 中枢适配器</h3>
+<p><strong>这是规则引擎能跑真实数据的关键</strong>。把 CVAT 源标注 →
+<code>rules/schema.md</code> 定义的全部消费对象:</p>
+<ul>
+  <li><code>fire_compartment</code> ← polygon + zone_type + area_m2_design</li>
+  <li><code>door</code> ← fire_door + class + swing_dir + 关联 width_line 算净宽</li>
+  <li><code>exit</code> ← safety_exit + 派生 zone / direction_group / leads_to</li>
+  <li><code>exit_pair</code> ← 出口两两 same_direction / adjacent 判定</li>
+  <li><code>corridor</code> ← stair_escalator / gate + width_line</li>
+  <li><code>evac_distance_line</code> ← 折线 text_content 或几何长度</li>
+  <li><code>shop / shop_pair / fire_shutter</code> ← 对应源对象</li>
+  <li><code>station</code> ← 项目级配置(transfer_lines / project_all_doors_class_A 等)</li>
+</ul>
+<pre><code>python tools/anno_to_structured.py  标注.xml  --scale 0.0254  \
+    --station-meta examples/station_meta.json  --out structured.json</code></pre>
+
+<hr>
+
+<h2 id="rule">4. 规则引擎 rule_engine.py</h2>
+
+<h3>4.1 配置文件</h3>
+<ul>
+  <li><code>rules/rules.json</code> — 37 条规则数据</li>
+  <li><code>rules/schema.md</code> — 规则 schema + 派生口径文档</li>
+  <li><code>examples/sample_structured.json</code> — 覆盖全规则分支的样例</li>
+</ul>
+
+<h3>4.2 命令行</h3>
+<pre><code># 干跑:校验 rules.json 完整性
+python tools/rule_engine.py  rules/rules.json  --dry-run
+
+# 对结构化数据评估
+python tools/rule_engine.py  rules/rules.json  --data structured.json</code></pre>
+
+<h3>4.3 输出 finding 字段</h3>
+<table>
+<tr><th>字段</th><th>说明</th></tr>
+<tr><td>rule_id / name / category</td><td>规则标识</td></tr>
+<tr><td>target_type / target_id</td><td>违规对象(FC-01 / DR-005 等)</td></tr>
+<tr><td>passed</td><td>true(合规) / false(违规) / null(数据不足)</td></tr>
+<tr><td>review_required</td><td>true 时表示要人工复核</td></tr>
+<tr><td>value / threshold</td><td>实际值 / 规范阈值</td></tr>
+<tr><td>severity / mandatory</td><td>critical/warning,强条/非强条</td></tr>
+<tr><td>source</td><td>规范出处(GB 50157-2013 28.2.7 等)</td></tr>
+<tr><td>message</td><td>人类可读违规描述</td></tr>
+</table>
+
+<hr>
+
+<h2 id="e2e">5. 端到端</h2>
+
+<h3>5.1 mvp_e2e.py — 一条命令 <span class="badge new">推荐</span></h3>
+<pre><code># 自动从 PDF 算 scale
+python tools/mvp_e2e.py  annotations.xml  底图.jpg  输出目录  --pdf 矢量.pdf
+
+# 或手动 scale
+python tools/mvp_e2e.py  annotations.xml  底图.jpg  输出目录  --scale 0.0254
+
+# 带站点级配置(transfer_lines / project_all_doors_class_A 等)
+python tools/mvp_e2e.py  annotations.xml  底图.jpg  输出目录  \
+    --pdf 矢量.pdf  --station-meta examples/station_meta.json</code></pre>
+
+<p><strong>产物</strong>(输出目录下):</p>
+<ul>
+  <li><code>&lt;stem&gt;_e2e_fail.jpg</code> — 标注图(红框 + 中文规则编号,所有 FAIL 位置)</li>
+  <li><code>&lt;stem&gt;_structured.json</code> — 结构化数据</li>
+  <li><code>&lt;stem&gt;_findings.json</code> — 全部规则评估结果</li>
+  <li><code>&lt;stem&gt;_report.md</code> — Markdown 报告(按规则分类的违规清单)</li>
+</ul>
+
+<h3>5.2 mvp_batch.py — 批量(整个站点目录) <span class="badge new">新</span></h3>
+<pre><code>python tools/mvp_batch.py  底图目录  XML目录  PDF根目录  输出目录</code></pre>
+<p>逻辑:遍历所有 jpg → 按 stem 自动匹配 XML 和 PDF → 逐张跑 mvp_e2e → 汇总 Markdown。</p>
+
+<div class="tip">
+<strong>实测基准</strong>(18 张图,9 站厅 + 9 总平面):触发规则 2411 条,
+PASS 1149 / FAIL 521 / REVIEW 741。站厅层平均 57 条 FAIL/图。
+</div>
+
+<h3>5.3 e2e_demo.py — 旧版基于 PDF 的端到端</h3>
+<pre><code>python tools/e2e_demo.py  图纸.pdf  输出目录  --page 0 --dpi 200</code></pre>
+<p>主走"矢量文字层直读防火分区"路线,适合<strong>没有 CVAT 标注</strong>的快速验证场景。
+新工作流推荐 <code>mvp_e2e.py</code>。</p>
+
+<h3>5.4 fangju_demo.py — 防火间距比对</h3>
+<pre><code>python tools/fangju_demo.py  标注.xml  总平面图.pdf  [输出目录]  \
+    --rules rules/rules.json</code></pre>
+<p>专用于总平面图:出入口/风亭 ↔ 周边建筑 防火间距判定。</p>
+
+<hr>
+
+<h2 id="yolo">6. YOLO 训练</h2>
+
+<h3>6.1 build_dataset.py — CVAT → YOLO-seg 数据集</h3>
+<pre><code>python app/backend/build_dataset.py  标注目录  数据集目录  \
+    --tile 1024  --overlap 128  --seed 0</code></pre>
+
+<p><strong>标注目录结构要求</strong>:</p>
+<pre><code>标注目录/
+  *.xml          (CVAT 1.1)
+  images/        或 images/default/   (CVAT 1.1 嵌套)
+    *.jpg</code></pre>
+
+<p><strong>训练目标类</strong>(<code>CLASS_NAMES</code>,16 类,顺序即类别 ID):</p>
+<pre><code>fire_compartment, commercial_shop, surrounding_building,
+station_exit_ground, vent_group_ground,
+fire_door, stair_escalator, draft_curtain,
+building_meta, vent_meta, dimension_val,
+room_title, val_text,
+safety_exit, gate, fire_shutter</code></pre>
+
+<p>polyline 类(fire_clearance_line / evac_distance_line / width_dimension_line)<strong>不作为训练目标</strong>(无面积无法 YOLO-seg),自动跳过。</p>
+
+<h3>6.2 train_yolo.py — 训练 / 评估</h3>
+<pre><code># 训练
+python app/backend/train_yolo.py  train  data.yaml  \
+    --model yolo11s-seg.pt  --epochs 50  --imgsz 1024  --batch 4  \
+    --patience 10  --device 0  --workers 0  --no-amp  \
+    --project runs  --name fire_seg_v1
+
+# 评估
+python app/backend/train_yolo.py  val  data.yaml  \
+    --weights runs/fire_seg_v1/weights/best.pt  --imgsz 1024</code></pre>
+
+<div class="warn">
+<strong>RTX 50 系新卡 + Windows + 中文路径</strong> 三件套必加:
+<code>--workers 0</code>(避共享内存 bug)+ <code>--no-amp</code>(避 AMP cudaErrorUnknown)+
+<code>--batch 4</code>(关 AMP 后显存翻倍)。
+</div>
+
+<h3>6.3 sahi_predict.py — 切片推理 <span class="badge new">新</span></h3>
+<p><strong>解决</strong>:大图(14000×3300)直接缩到 1024 后小目标(防火门、闸机)大量漏检。</p>
+<pre><code>python tools/sahi_predict.py  best.pt  图.jpg  \
+    --tile 1024  --overlap 128  --conf 0.25 --iou 0.5  \
+    --out 输出目录</code></pre>
+<p><strong>实测对比</strong>:嘉宾站站厅层(9395×3339)— 整图缩 1024 推理 = 1 个对象;
+切片推理(44 块) = 114 个对象。<strong>数量级飞跃</strong>。</p>
+
+<hr>
+
+<h2 id="report">7. 报告导出 report_docx.py</h2>
+<pre><code>python tools/report_docx.py  e2e_输出目录</code></pre>
+<p>把 e2e 的产出(结构化 JSON + 标注图)汇编成 Word 报告:封面 / 结论 / 逐条检查表 / 标注图 / 免责声明。
+依赖 <code>python-docx</code>。</p>
+
+<hr>
+
+<h2 id="vector">8. 矢量层直读 vector_extract.py</h2>
+<p>直读图纸文字层里的"防火分区 名称+区域类型+面积",产出规则引擎格式数据。
+<strong>比 OCR 准、不依赖标注/模型</strong>。</p>
+<pre><code>python tools/vector_extract.py  站厅层.pdf  --rules rules/rules.json</code></pre>
+<p>设计院常把"防火分区一(公共区):面积 3861.71㎡"直接写在矢量 PDF 文字层。
+本工具直读这些文字 — 但这是设计院<strong>声称值</strong>,会标注来源并做自洽检查;
+真伪几何复核留待后续。</p>
+
+<hr>
+
+<h2 id="extras">附:常见组合命令</h2>
+
+<h3>A. 收到新一批标注(CVAT 导出 zip),完整跑一遍审查</h3>
+<pre><code># 1. 解压 + 整理
+unzip 站厅层标注.zip -d ./新批次/
+
+# 2. 质检
+python tools/fire_anno_tool.py qc ./新批次/annotations.xml
+
+# 3. ERROR 修完后,一键端到端
+python tools/mvp_e2e.py  ./新批次/annotations.xml  ./新批次/images/default/某站.jpg  ./审查结果/  \
+    --pdf ./原始PDF/某站.pdf</code></pre>
+
+<h3>B. 训练自己的 YOLO 模型(用真实标注)</h3>
+<pre><code># 1. 建数据集
+python app/backend/build_dataset.py  ./标注目录/  ./yolo_dataset/  --tile 1024
+
+# 2. 训练 (RTX 50 系参数)
+python app/backend/train_yolo.py  train  ./yolo_dataset/data.yaml  \
+    --model yolo11s-seg.pt  --epochs 50  --imgsz 1024  --batch 4  \
+    --workers 0  --no-amp  --device 0
+
+# 3. 评估
+python app/backend/train_yolo.py  val  ./yolo_dataset/data.yaml  \
+    --weights runs/segment/runs/exp/weights/best.pt</code></pre>
+
+<h3>C. 在 18 张图上批量端到端</h3>
+<pre><code>python tools/mvp_batch.py  ./底图目录/  ./XML目录/  ./PDF根目录/  ./批量输出/
+# 跑完看 ./批量输出/_batch_report.md</code></pre>
+
+<hr>
+
+<p style="text-align: center; color: #95a5a6; font-size: 13px; margin-top: 50px;">
+所有脚本支持 <code>-h</code> / <code>--help</code> 看完整参数 &nbsp;|&nbsp; 文档版本:2026-06
+</p>
+
+</body>
+</html>
