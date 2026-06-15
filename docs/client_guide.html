@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>消防图纸 AI 预审 · 客户端使用文档</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+         max-width: 1100px; margin: 24px auto; padding: 0 28px; color: #2c3e50;
+         line-height: 1.7; background: #fafbfc; }
+  h1 { color: #c0392b; border-bottom: 3px solid #c0392b; padding-bottom: 10px; }
+  h2 { color: #2980b9; margin-top: 36px; border-left: 5px solid #2980b9; padding-left: 12px; }
+  h3 { color: #27ae60; margin-top: 28px; }
+  h4 { color: #8e44ad; margin-top: 20px; }
+  code { background: #f4f6f8; padding: 2px 6px; border-radius: 3px;
+         font-family: "Consolas", "Monaco", monospace; color: #e74c3c; }
+  pre { background: #2c3e50; color: #ecf0f1; padding: 14px 18px; border-radius: 6px;
+        overflow-x: auto; font-size: 13.5px; line-height: 1.55; }
+  pre code { background: transparent; color: #ecf0f1; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; background: white; }
+  th, td { border: 1px solid #d5dbdb; padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: #34495e; color: white; font-weight: 600; }
+  tr:nth-child(even) td { background: #fbfcfd; }
+  .tip { background: #eafaf1; border-left: 4px solid #27ae60; padding: 10px 16px;
+         margin: 14px 0; border-radius: 0 4px 4px 0; }
+  .warn { background: #fef5e7; border-left: 4px solid #e67e22; padding: 10px 16px;
+          margin: 14px 0; border-radius: 0 4px 4px 0; }
+  .danger { background: #fdedec; border-left: 4px solid #e74c3c; padding: 10px 16px;
+            margin: 14px 0; border-radius: 0 4px 4px 0; }
+  .toc { background: #ecf0f1; padding: 12px 22px; border-radius: 6px; margin: 18px 0 28px; }
+  .toc ol { margin: 6px 0; padding-left: 22px; }
+  .toc a { color: #2980b9; text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .badge { display: inline-block; padding: 1px 9px; border-radius: 10px;
+           font-size: 12px; font-weight: 600; color: white; margin-right: 4px; }
+  .badge.green { background: #27ae60; }
+  .badge.blue  { background: #2980b9; }
+  .badge.purple { background: #8e44ad; }
+  .badge.orange { background: #e67e22; }
+  hr { border: none; border-top: 1px dashed #bdc3c7; margin: 30px 0; }
+  kbd { background: #34495e; color: white; padding: 1px 7px; border-radius: 3px;
+        font-size: 12px; font-family: "Consolas", monospace; }
+</style>
+</head>
+<body>
+
+<h1>🔥 消防图纸 AI 预审 · 客户端使用文档</h1>
+
+<p>本文档面向<strong>实际使用人员</strong>(预审员、标注员、技术管理),覆盖客户端 4 个页面的完整用法。
+客户端是个 PySide6 桌面程序,把命令行能力包成图形界面 — 选文件、点按钮即可。</p>
+
+<div class="toc">
+<strong>目录</strong>
+<ol>
+  <li><a href="#start">启动与界面布局</a></li>
+  <li><a href="#prepare">页面一:数据准备</a>(预标注 / 质检 / 中英转换)</li>
+  <li><a href="#e2e">页面二:端到端预审</a>(拖入 PDF 一键审图)</li>
+  <li><a href="#rules">页面三:规则库</a>(查看 37 条消防检查规则)</li>
+  <li><a href="#train">页面四:YOLO 训练</a>(建数据集 / 训练 / 评估)</li>
+  <li><a href="#faq">常见问题</a></li>
+</ol>
+</div>
+
+<h2 id="start">1. 启动与界面布局</h2>
+
+<h3>1.1 启动方式</h3>
+<pre><code># 项目根目录(-yolo-)下:
+pip install -r requirements.txt
+python app/main.py</code></pre>
+
+<p>首次启动:</p>
+<ul>
+  <li>依赖包大约 1–2 GB(主要是 PySide6、PyTorch、ultralytics)</li>
+  <li><strong>GPU 推荐</strong>:RTX 系列显卡可大幅加速训练(本项目在 RTX 5060 上验证过)</li>
+  <li>纯 CPU 也能跑,只是训练慢 8-15 倍</li>
+</ul>
+
+<h3>1.2 主界面</h3>
+<p>左侧蓝色侧边栏:4 个导航按钮 — 数据准备 / 端到端预审 / 规则库 / YOLO 训练</p>
+<p>右侧大区域:当前选中页面的工作区,通常分两部分:</p>
+<ul>
+  <li><strong>左侧控制卡片</strong>(宽 400 px):填参数、点按钮</li>
+  <li><strong>右侧分屏</strong>(上:图片预览,下:实时日志)</li>
+</ul>
+
+<div class="tip">
+<strong>所有任务都用子进程跑</strong> — 不会卡死界面、可以随时点"停止",日志会实时滚动出来。
+</div>
+
+<hr>
+
+<h2 id="prepare">2. 页面一:数据准备 <span class="badge purple">三件套</span></h2>
+
+<p>把原始图纸或标注文件,加工成可以用于 AI 训练 / 质检的数据。</p>
+
+<h3>2.1 预标注 <span class="badge blue">prelabel</span></h3>
+<p><strong>用途</strong>:在图纸上自动框出文字、尺寸线、防火分区等元素并预先分类,人工只需复查纠正,
+不用从白纸开始一个个画。能减少标注员 60–80% 的工作量。</p>
+<p><strong>输入</strong>:</p>
+<table>
+<tr><th>字段</th><th>说明</th></tr>
+<tr><td>图纸 PDF</td><td>必须是<strong>矢量 PDF</strong>(能用鼠标选中文字的那种,一般由 CAD / 天正导出)。扫描件、拍照图不行。</td></tr>
+<tr><td>结果存到</td><td>留空 = 存到原 PDF 所在文件夹</td></tr>
+<tr><td>第几页</td><td>页码从 0 开始数</td></tr>
+<tr><td>清晰度(DPI)</td><td>默认 200 够用;栅格小、字小可调到 300</td></tr>
+<tr><td>图纸类型</td><td><code>hall</code>(站厅)或 <code>site</code>(总平面)</td></tr>
+<tr><td>启用 OCR</td><td>勾上读图上数字(需要装 tesseract 系统级 OCR)</td></tr>
+</table>
+<p><strong>输出</strong>(在选定目录下):</p>
+<ul>
+  <li><code>底图.jpg</code>:从 PDF 渲染出的图片</li>
+  <li><code>底图_prelabel.xml</code>:CVAT 1.1 格式预标注(导入 CVAT 复审)</li>
+  <li><code>底图_overlay.jpg</code>:预标注效果叠加预览</li>
+</ul>
+
+<h3>2.2 质检(QC) <span class="badge blue">qc</span></h3>
+<p><strong>用途</strong>:检查 CVAT 标注文件是否符合 schema 规范。能自动找出:</p>
+<ul>
+  <li>🔴 ERROR:非法标签、退化几何(零面积)、必现类缺失(如总平面图必须有 surrounding_building)</li>
+  <li>🟠 WARN:属性值不在枚举集、数量异常(商铺 > 3 个)、宽度尺寸线两端无对应实体(ORPHAN)</li>
+  <li>🔵 INFO:重复重叠、属性全留空提示(可能上游有文字层未代抽)</li>
+</ul>
+<p><strong>输入</strong>:标注 XML 文件 + 图纸类型(站厅 / 总平面 / 自动判断)</p>
+<p><strong>输出</strong>:在日志区显示分级报告。<strong>ERROR 数 = 0 才可交付</strong>。</p>
+
+<h3>2.3 转换 <span class="badge blue">convert</span></h3>
+<p><strong>用途</strong>:把 CVAT 里的中文标签批量改成英文 snake_case(规范要求 schema 100% 英文)。</p>
+<p><strong>特性</strong>:带"漏转自检" — 没在映射表里的中文标签会报错并列出,不会静默漏掉。</p>
+
+<div class="warn">
+<strong>新批次工作流(推荐)</strong>:CVAT 项目按 <code>rules/cvat_labels.json</code> 锁死下拉菜单后,
+标注员选的就是英文标签,convert 这一步几乎不再需要。具体见 <code>docs/cvat_template_setup.md</code>。
+</div>
+
+<hr>
+
+<h2 id="e2e">3. 页面二:端到端预审 <span class="badge green">主功能</span></h2>
+
+<p>这是 MVP 的核心功能 — <strong>拖入 PDF → 一键审图</strong>,输出标注图 + 结构化数据 + Word 报告。</p>
+
+<h3>3.1 操作步骤</h3>
+<ol>
+  <li>选择<strong>图纸 PDF</strong>(矢量 PDF,能选中文字的)</li>
+  <li>选择<strong>结果存到</strong>(留空 = PDF 旁新建 <code>e2e_out</code>)</li>
+  <li>设置页码(默认 0)和 DPI(默认 200)</li>
+  <li>点 <kbd>开始预审</kbd></li>
+</ol>
+
+<h3>3.2 4 个阶段的实时反馈</h3>
+<p>左侧"流程进度"会显示 4 个阶段:</p>
+<table>
+<tr><th>阶段</th><th>做什么</th></tr>
+<tr><td>① 识别图纸内容(文字 / 尺寸)</td><td>矢量文字层直读 + YOLO 识别(若有训练权重)</td></tr>
+<tr><td>② 计算面积、类型、疏散距离</td><td>几何量测(像素 → 米)</td></tr>
+<tr><td>③ 对照消防规范逐条比对</td><td>规则引擎跑 37 条规则</td></tr>
+<tr><td>④ 在原图标出问题位置</td><td>红框 / 黄框 / 绿框标违规位置</td></tr>
+</table>
+
+<h3>3.3 产物</h3>
+<ul>
+  <li><code>e2e_annotated.png/.pdf</code>:原图标注版(<span style="color:#e74c3c;">红=超限</span> / <span style="color:#f39c12;">黄=待复核</span> / <span style="color:#27ae60;">绿=合规</span>)</li>
+  <li><code>e2e_structured.json</code>:结构化数据(防火分区面积、违规清单)</li>
+  <li>右侧上半屏自动展示标注图,可滚轮缩放</li>
+</ul>
+
+<h3>3.4 导出 Word 报告</h3>
+<p>预审跑完后 <kbd>导出 Word 报告</kbd> 按钮变可点,生成 <code>审查报告.docx</code>:封面 / 结论 / 逐条检查表 / 标注图 / 免责声明。</p>
+
+<div class="tip">
+<strong>优先文字层直读</strong>:图纸已写明防火分区面积的(如"防火分区一(公共区):3861.71㎡"),
+直接读最准、带规范出处;只有图纸没写明时才回退 OCR(可能有噪声)。
+</div>
+
+<hr>
+
+<h2 id="rules">4. 页面三:规则库 <span class="badge orange">查询</span></h2>
+
+<p><strong>用途</strong>:可视化展示规则引擎里的 37 条消防检查规则,可按类别筛选 / 搜索 / 用样例数据试跑。</p>
+
+<h3>4.1 规则分布(8 大类)</h3>
+<table>
+<tr><th>类别</th><th>规则数</th><th>典型规则</th></tr>
+<tr><td>防火分区面积</td><td>8</td><td>站厅公共区 ≤ 5000㎡ / 设备区 ≤ 1500㎡(地下)</td></tr>
+<tr><td>疏散宽度</td><td>5</td><td>疏散门净宽 ≥ 0.9m / 楼梯净宽 ≥ 1.4m</td></tr>
+<tr><td>安全出口</td><td>5</td><td>每个设备区分区 ≥ 2 个出口 / 有人值守区 ≥ 1 个直通地面</td></tr>
+<tr><td>安全疏散</td><td>3</td><td>任一点至安全出口疏散距离 ≤ 50m</td></tr>
+<tr><td>防火门窗卷帘</td><td>5</td><td>疏散门必须向疏散方向开启 / 卷帘宽度 ≤ 洞口宽/3</td></tr>
+<tr><td>商铺</td><td>4</td><td>公共区商铺总面积 ≤ 100㎡ / 数量 ≤ 3</td></tr>
+<tr><td>防火间距</td><td>3</td><td>出入口/风亭与周边建筑 ≥ 6m(多层) / ≥ 9m(高层) / ≥ 50m(加油站)</td></tr>
+<tr><td>防排烟</td><td>4</td><td>新风口与排风/活塞口距离 ≥ 10m / 排风口高于新风口</td></tr>
+</table>
+
+<h3>4.2 操作</h3>
+<ul>
+  <li>类别下拉框筛选</li>
+  <li>搜索框按 rule_id / 名称 / 来源关键字过滤</li>
+  <li>点单条规则查看完整 JSON 定义</li>
+  <li><kbd>用样例数据试跑</kbd> 按钮可在 <code>examples/sample_structured.json</code> 上验证</li>
+</ul>
+
+<hr>
+
+<h2 id="train">5. 页面四:YOLO 训练 <span class="badge orange">高级</span></h2>
+
+<p><strong>面向懂模型的人</strong> — 保留 epochs/imgsz 等术语,旁边都配了说明。流程分三步:</p>
+
+<h3>5.1 第一步:建数据集</h3>
+<table>
+<tr><th>参数</th><th>说明</th><th>默认</th></tr>
+<tr><td>标注目录</td><td>里面要有 CVAT XML 和对应底图,成对存放(支持 <code>images/default/</code> 嵌套)</td><td>—</td></tr>
+<tr><td>数据集存到</td><td>输出 YOLO-seg 格式的训练集(含 <code>data.yaml</code>)</td><td>—</td></tr>
+<tr><td>切片大小</td><td>大图切小块训练,边长 px;填 0 = 不切</td><td>1024</td></tr>
+<tr><td>切片重叠</td><td>块之间留点重叠,免得目标被切断</td><td>128</td></tr>
+<tr><td>随机种子</td><td>固定 = 划分 train/val/test(8:1:1)结果可复现</td><td>0</td></tr>
+</table>
+<p>跑完后会自动把 <code>data.yaml</code> 衔接到下一步的"训练 / 评估"页。</p>
+
+<h3>5.2 第二步:训练</h3>
+<table>
+<tr><th>参数</th><th>说明</th><th>建议</th></tr>
+<tr><td>数据集配置</td><td>上一步生成的 data.yaml</td><td>—</td></tr>
+<tr><td>预训练权重</td><td>从这个权重接着学,别从零训</td><td><code>yolo11s-seg.pt</code></td></tr>
+<tr><td>epochs</td><td>训练轮数,越多越久</td><td>100(先试) / 50(快)</td></tr>
+<tr><td>imgsz</td><td>训练用的图片边长,目标小用大图</td><td>1024(与切片对齐)</td></tr>
+<tr><td>batch</td><td>一次喂几张,显存不够调小</td><td>8(RTX 5060) / 4(8GB) / 2(CPU)</td></tr>
+<tr><td>patience</td><td>多少轮没进步就提前停</td><td>20</td></tr>
+<tr><td>device</td><td>留空=自动;<code>0</code>=第一块显卡;<code>cpu</code>=CPU</td><td>留空</td></tr>
+</table>
+
+<div class="warn">
+<strong>RTX 50 系新卡 (Blackwell sm_120) 用户注意</strong>:命令行直接用 <code>--no-amp</code> 关 AMP,
+<code>--workers 0</code> 避开 Windows 多进程共享内存问题。客户端目前默认参数未带这两项,
+出错时改在 <strong>命令行</strong>跑 <code>app/backend/train_yolo.py train ... --no-amp --workers 0 --batch 4</code>。
+</div>
+
+<h3>5.3 第三步:评估</h3>
+<ul>
+  <li>选 <code>data.yaml</code> + 训练产出的 <code>best.pt</code></li>
+  <li>看 <strong>mAP50</strong>(整体准确度)和每类的 P/R(查准率/查全率)</li>
+  <li>混淆矩阵图会显示在右上方,看哪类元素容易认错</li>
+</ul>
+
+<div class="tip">
+<strong>实测基准</strong>(2026-06 数据 18 张 / RTX 5060 / yolo11s-seg / 37 epoch):
+gate=0.995 / vent_group_ground=0.98 / fire_door=0.92 / station_exit_ground=0.79;
+样本少的类(safety_exit=4 实例 / commercial_shop=1 实例)mAP=0 — 这是数据量问题,
+后续按 <code>docs/yolo_training_guide.html</code> 增量加数据即可。
+</div>
+
+<hr>
+
+<h2 id="faq">6. 常见问题</h2>
+
+<h3>Q1. 客户端卡住怎么办?</h3>
+<p>所有耗时操作都是子进程,理论上不会卡界面。如果真卡住,点 <kbd>停止</kbd>;
+最坏可以直接关窗口,数据安全(不会丢已写的文件)。</p>
+
+<h3>Q2. PDF 用不了?</h3>
+<p>预标注/端到端必须是<strong>矢量 PDF</strong>(能选中文字)。扫描件 / 拍照图 = 栅格 PDF,
+会被识别为"无文字层"并降级为人工标注模式。</p>
+
+<h3>Q3. 训练页"首次会自动下载预训练权重",但下载卡住?</h3>
+<p>预训练权重 (yolo11s-seg.pt) 20MB 左右,从 GitHub 拉。
+网络不通时手动下载放项目根,客户端会优先用本地的。</p>
+
+<h3>Q4. 字体显示不全 / 中文乱码?</h3>
+<p>Windows 默认字体即可。Linux 需要装思源黑体或微软雅黑;
+日志输出乱码可设 <code>$env:PYTHONUTF8=1</code>。</p>
+
+<h3>Q5. 端到端预审跑得不准?</h3>
+<p>第一版的真实精度受两件事制约:</p>
+<ol>
+  <li><strong>YOLO 模型数据量</strong>:某些类(商铺、防火卷帘)训练实例 < 20 个,mAP 偏低</li>
+  <li><strong>比例尺标定</strong>:目前从 PDF 矢量文字层读"1:N";栅格 PDF 无法自动标定</li>
+</ol>
+<p>修正:补标新站点数据 + 重新训练(走 <code>docs/yolo_training_guide.html</code> 增量流程)。</p>
+
+<hr>
+
+<p style="text-align: center; color: #95a5a6; font-size: 13px; margin-top: 50px;">
+项目仓库:消防图纸 AI 预审 MVP &nbsp;|&nbsp; 文档版本:2026-06 &nbsp;|&nbsp; 配套客户端 PySide6 ≥ 6.6
+</p>
+
+</body>
+</html>
