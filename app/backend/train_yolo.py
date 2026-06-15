@@ -48,6 +48,8 @@ def train(args):
         project=args.project,
         name=args.name,
         device=(args.device or None),
+        workers=args.workers,   # Windows + 中文路径下 workers>0 易触发 'Couldn't open shared file mapping'
+        amp=args.amp,           # 部分新卡(如 RTX 50系 Blackwell)+ PyTorch AMP 偶发 cudaErrorUnknown，可关
         exist_ok=True,
     )
     import os
@@ -89,6 +91,11 @@ def main():
     t.add_argument("--project", default="runs")
     t.add_argument("--name", default="exp")
     t.add_argument("--device", default="")
+    t.add_argument("--workers", type=int, default=8,
+                   help="DataLoader workers；Windows + 中文路径建议 0")
+    t.add_argument("--no-amp", dest="amp", action="store_false",
+                   help="关闭自动混合精度(AMP)；RTX 50系/Blackwell 等新卡偶发 cudaErrorUnknown 时使用")
+    t.set_defaults(amp=True)
 
     v = sub.add_parser("val")
     v.add_argument("data")

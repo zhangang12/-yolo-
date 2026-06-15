@@ -26,13 +26,15 @@ try:
 except Exception:
     pass
 
-# 训练目标类（顺序即类别 id，勿随意调换）。polyline 类不在内。
+# 训练目标类（顺序即类别 id，**只追加不重排，否则旧权重对不上**）。polyline 类不在内。
 CLASS_NAMES = [
     "fire_compartment", "commercial_shop", "surrounding_building",
     "station_exit_ground", "vent_group_ground",
     "fire_door", "stair_escalator", "draft_curtain",
     "building_meta", "vent_meta", "dimension_val",
     "room_title", "val_text",
+    # 6.6 schema v3 新增标签 → 必须纳入训练，否则真实标注会被当背景丢掉
+    "safety_exit", "gate", "fire_shutter",
 ]
 CLASS_ID = {n: i for i, n in enumerate(CLASS_NAMES)}
 SKIP_LABELS = {"fire_clearance_line", "evac_distance_line", "width_dimension_line"}

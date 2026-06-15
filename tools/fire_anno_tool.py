@@ -248,7 +248,7 @@ LABEL_COLORS = {
 _CVAT_GEOM_MAP = {"box": "rectangle", "polygon": "polygon", "polyline": "polyline"}
 
 # 属性是否可变（mutable=True 的标好后还能改；如 text 内容）
-_MUTABLE_ATTRS = {"text_content", "pair_id", "name", "area_m2", "floors", "height_m", "width"}
+_MUTABLE_ATTRS = {"text_content", "pair_id", "name", "area_m2", "area_m2_design", "floors", "height_m", "width"}
 
 ALLOWED_LABELS = set(LABELS)
 ALLOWED_ATTR_KEYS = {a for v in LABELS.values() for a in v["attrs"]}
@@ -913,13 +913,17 @@ def export_cvat_labels(out_path=None):
                 vals = sorted(ENUMS[a])
                 # 枚举值多时用 select，少时用 radio
                 input_type = "radio" if len(vals) <= 4 else "select"
-                # default_value 优先选 unknown，否则取第一个
-                default = "unknown" if "unknown" in vals else vals[0]
-            elif a in ("area_m2", "height_m", "floors", "width"):
+                # default_value：有 unknown 的用 unknown 兜底；
+                # 没有 unknown 的(zone_type/vent_function/swing_dir)留空，强制标注员主动选(方案A)——
+                # 漏选则该值为空，必填项会被 QC 的 MISSING_ATTR 抓出，
+                # 避免静默落到一个"看似合法但可能错"的具体默认值。
+                default = "unknown" if "unknown" in vals else ""
+            elif a in ("area_m2", "area_m2_design", "height_m", "floors", "width"):
                 # CVAT number 格式：values=["min;max;step"]
                 input_type = "number"
                 ranges = {
                     "area_m2": "0;100000;0.01",
+                    "area_m2_design": "0;100000;0.01",   # 设计院声称分区面积(㎡)
                     "height_m": "0;300;0.1",
                     "floors": "0;100;1",
                     "width": "0;10;0.01",

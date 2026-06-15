@@ -21,7 +21,7 @@
           "新风",
           "活塞风"
         ],
-        "default_value": "冷却塔风"
+        "default_value": ""
       },
       {
         "name": "discharge_type",
@@ -197,16 +197,16 @@
           "无人区",
           "有人值守区"
         ],
-        "default_value": "公共区"
+        "default_value": ""
       },
       {
         "name": "area_m2_design",
-        "input_type": "text",
-        "mutable": false,
+        "input_type": "number",
+        "mutable": true,
         "values": [
-          ""
+          "0;100000;0.01"
         ],
-        "default_value": ""
+        "default_value": "0"
       }
     ]
   },
@@ -274,7 +274,7 @@
           "逆着疏散方向",
           "顺着疏散方向"
         ],
-        "default_value": "逆着疏散方向"
+        "default_value": ""
       },
       {
         "name": "text_content",

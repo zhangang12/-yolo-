@@ -10,10 +10,13 @@ venv/
 *.dwg
 *.dxf
 *.zip
+*.doc
 *.docx
 *.jpg
 *.jpeg
 *.png
+# 解压/合并出来的数据目录
+data/anno_*/
 # 例外：示例 JSON 与文档可入
 !examples/*.json
 
