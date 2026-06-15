@@ -37,6 +37,9 @@ def render(page, dpi):
 def stage1_recognize(page, sc, Wp, Hp):
     import cv2, numpy as np, pytesseract
     from PIL import Image
+    # PATH 没设 tesseract 时,自动探测常见安装目录,避免误报"未安装"
+    from tesseract_init import ensure_tesseract
+    ensure_tesseract()
     draws = page.get_drawings()
 
     # --- 文字块候选（聚类小笔画）---

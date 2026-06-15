@@ -134,6 +134,23 @@ tesseract --version</code></pre>
 不装 tesseract,矢量 PDF 工作流完全跑通。
 </div>
 
+<h4>tesseract_init.py — PATH 没设也能用 <span class="badge new">新</span></h4>
+<p>真实情况:不少 Windows 用户装了 Tesseract 但<strong>忘了加 PATH</strong>,
+<code>tesseract --version</code> 报"不是内部或外部命令"。
+本项目在 <code>tools/tesseract_init.py</code> 加了自动探测:</p>
+<pre><code>from tesseract_init import ensure_tesseract
+ok, cmd = ensure_tesseract(verbose=True)
+# ✅ tesseract 在 C:\Program Files\Tesseract-OCR\tesseract.exe (tesseract v5.5.0.20241111)</code></pre>
+<p>探测优先级:<code>shutil.which("tesseract")</code>(PATH)→ Windows / macOS / Linux 常见安装目录。
+所有用到 OCR 的脚本(<code>e2e_demo.py</code>、<code>prelabel_pro.py</code>)顶部都接了它。
+<strong>只要 Tesseract 装在默认目录</strong>(Win 是 <code>C:\Program Files\Tesseract-OCR\</code>、
+Mac 是 <code>/opt/homebrew/bin/</code>、Linux 是 <code>/usr/bin/</code>),
+<strong>无需手工配 PATH</strong> 项目就能跑。</p>
+
+<p>独立验证:</p>
+<pre><code>python tools/tesseract_init.py
+# 输出实际找到的 tesseract.exe 路径 + 版本号</code></pre>
+
 <hr>
 
 <h2 id="anno">2. 标注阶段</h2>
