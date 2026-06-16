@@ -164,7 +164,21 @@ class E2EPage(QWidget):
     def _export_report(self):
         if not self._out_dir:
             self.log.append_text("⚠️ 请先跑一次端到端预审。\n"); return
-        self.log.banner("导出 Word 审查报告")
+        # mvp 路径下 docx 已在 mvp_e2e 跑完时自动生成,直接打开
+        if getattr(self, "_use_mvp", False):
+            stem = getattr(self, "_pdf_stem", "")
+            docx = os.path.join(self._out_dir, f"{stem}_审查意见表.docx")
+            if os.path.exists(docx):
+                self.log.append_text(f"[报告] Word 审查意见表已生成: {docx}\n")
+                try:
+                    os.startfile(docx)   # Windows 用关联程序(Word)打开
+                except Exception as e:
+                    self.log.append_text(f"  (自动打开失败,请手动打开: {e})\n")
+            else:
+                self.log.append_text("⚠️ docx 未生成,可能 mvp_e2e 失败,检查日志。\n")
+            return
+        # 旧路径:跑 report_docx 脚本
+        self.log.banner("导出 Word 审查报告 (旧路径)")
         self.report_runner.run(REPORT, [self._out_dir])
 
     def _set_running(self, running):
