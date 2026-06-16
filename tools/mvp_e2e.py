@@ -289,9 +289,28 @@ def run(xml_path, img_path, out_dir, scale=None, station_meta=None, rules_path=N
     out_md = os.path.join(out_dir, f"{stem}_report.md")
     with open(out_md, "w", encoding="utf-8") as f:
         f.write("\n".join(md))
-    print(f"  报告: {out_md}")
+    print(f"  Markdown 报告: {out_md}")
+
+    # 5) 同时产出 Word 审查意见表 docx(仿真实审查报告格式,可交付)
+    out_docx = os.path.join(out_dir, f"{stem}_审查意见表.docx")
+    try:
+        import mvp_report_docx
+        mvp_report_docx.build(
+            findings_path=os.path.join(out_dir, f"{stem}_findings.json"),
+            annotated_img=out_jpg,
+            out_docx=out_docx,
+            station_name=stem,
+            design_stage="初审 (AI 预审)",
+            reviewer="AI 预审系统 (MVP)",
+            source_pdf_name=os.path.basename(img_path),
+        )
+        print(f"  Word 审查意见表: {out_docx}")
+    except Exception as e:
+        print(f"  ⚠️ Word 报告生成失败(可手动跑 mvp_report_docx.py): {e}")
+        out_docx = None
+
     print(f"\n[完成] {out_dir}")
-    return {"summary": summary, "annotated": out_jpg, "report": out_md}
+    return {"summary": summary, "annotated": out_jpg, "report": out_md, "docx": out_docx}
 
 
 def main():
