@@ -34,15 +34,18 @@ class E2EPage(QWidget):
         lv.addWidget(h1("端到端预审"))
         lv.addWidget(hint("拖入一张图纸 PDF，自动跑完「识别 → 计算 → 对照规范 → 标注」全流程，"
                           "最后给出一张标好问题的图和一份结论。\n\n"
-                          "▸ 推荐：同时选上 CVAT 标注 XML → 走真值审查，标注图清晰只圈违规位置 + 中文规则编号 + 走 37 条规则。\n"
-                          "▸ 仅 PDF：兜底走文字层直读 + OCR，只能查防火分区面积；噪声多。\n\n"
+                          "▸ 方式①：CVAT 真值标注 — 标注员预先在 CVAT 画好，识别 100% 准，下游规则结果最可信。\n"
+                          "▸ 方式②：YOLO 模型自动识别 — best.pt 切片推理后转 CVAT 喂下游，速度快、零人工，但精度受模型限制。\n"
+                          "▸ 都不填：自动在 data/anno_*/ 找匹配 CVAT；都没找到才退回旧 OCR 路径。\n\n"
                           "比例尺自动从 PDF 矢量文字层读 1:N（如 1:200），无需手填。"))
 
         self.pdf = PathRow("图纸 PDF", "pdf", "PDF (*.pdf)")
-        self.xml = PathRow("CVAT 标注（可选）", "file", "XML (*.xml)",
-                           placeholder="如有真值标注 → 走真值审查，结果最准；留空走旧 OCR 路径")
+        self.xml = PathRow("方式①  CVAT 真值标注", "file", "XML (*.xml)",
+                           placeholder="审查员标注好的 XML，准确度最高；留空可走方式②")
+        self.yolo_weights = PathRow("方式②  YOLO 模型权重", "file", "权重 (*.pt)",
+                           placeholder="best.pt 自动识别图上元素；与方式①二选一(同时填以①为准)")
         self.out = PathRow("结果存到", "dir", placeholder="留空＝在 PDF 旁新建 e2e_out 文件夹")
-        lv.addWidget(self.pdf); lv.addWidget(self.xml); lv.addWidget(self.out)
+        lv.addWidget(self.pdf); lv.addWidget(self.xml); lv.addWidget(self.yolo_weights); lv.addWidget(self.out)
 
         row = QHBoxLayout()
         row.addWidget(section("第几页")); self.page = QSpinBox(); self.page.setRange(0, 999)
@@ -91,35 +94,46 @@ class E2EPage(QWidget):
     def _run(self):
         pdf = self.pdf.text()
         xml = self.xml.text()
+        yolo = self.yolo_weights.text()
         if not pdf:
             self.log.append_text("⚠️ 请先选择矢量 PDF。\n"); return
 
-        # ★ 关键改动:用户没手填 CVAT XML 时,自动在仓库 data/anno_*/ 下找匹配的标注。
-        #   命中即走 mvp_e2e 真值路径,UI 提示已自动匹配;找不到才退回旧路径。
-        #   这是用户痛点修复:之前不填 XML 默认走旧路径 → 产物文件名是旧的 e2e_annotated.xxx。
-        if not xml:
+        # ★ 数据源优先级 (mvp_e2e 走的"识别"那一环):
+        #   ① 用户手填 CVAT XML       — 真值最准
+        #   ② 用户手填 YOLO best.pt   — 自动识别(精度受模型限制)
+        #   ③ 自动匹配 data/anno_*/   — 找到也走真值路径
+        #   ④ 都没 → 走旧 e2e_demo 兜底路径
+        if not xml and not yolo:
             xml = self._auto_find_xml(pdf)
             if xml:
                 self.log.append_text(f"[自动匹配] 找到 CVAT 标注: {xml}\n  走真值路径(mvp_e2e)\n")
-                self.xml.set_text(xml)        # 同步到 UI,让用户看到
+                self.xml.set_text(xml)
             else:
                 self.log.append_text("[自动匹配] 未在 data/anno_*/ 下找到匹配的 CVAT 标注\n"
-                                     "  → 走兜底路径(e2e_demo),只能查防火分区面积\n")
+                                     "  ⚠️ 也未提供 YOLO 模型 → 走兜底路径(e2e_demo)\n")
 
         out = self.out.text() or os.path.join(os.path.dirname(os.path.abspath(pdf)), "e2e_out")
         self._out_dir = out
-        self._use_mvp = bool(xml)
+        self._use_mvp = bool(xml or yolo)
         self._pdf_stem = naming.product_stem(pdf)
         self.report_btn.setEnabled(False)
         for l, s in zip(self.stage_labels, STAGES):
             l.setText("○  " + s)
 
         if xml:
-            self.log.banner("端到端预审开始 [真值路径 mvp_e2e]")
+            self.log.banner("端到端预审开始 [方式①: CVAT 真值标注]")
             self._set_running(True)
             self.runner.run(TOOL_MVP, [xml, pdf, out, "--pdf", pdf])
+        elif yolo:
+            self.log.banner("端到端预审开始 [方式②: YOLO 模型自动识别]")
+            self._set_running(True)
+            # 第一个参数是 CVAT XML 路径,留空字符串表示走 yolo
+            self.runner.run(TOOL_MVP, ["", pdf, out, "--pdf", pdf,
+                                       "--yolo-weights", yolo,
+                                       "--yolo-conf", "0.25",
+                                       "--yolo-device", "0"])
         else:
-            self.log.banner("端到端预审开始 [兜底路径 e2e_demo,无真值标注]")
+            self.log.banner("端到端预审开始 [兜底路径 e2e_demo,无真值标注/无 YOLO]")
             self._set_running(True)
             self.runner.run(TOOL, [pdf, out, "--page", self.page.value(), "--dpi", self.dpi.value()])
 
