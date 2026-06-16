@@ -24,6 +24,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import anno_to_structured
 import rule_engine
 import scale_calibrate
+import naming
 
 
 # ---------- 中文路径安全读写图 ----------
@@ -205,7 +206,9 @@ def run(xml_path, img_path, out_dir, scale=None, station_meta=None, rules_path=N
     rules_path = rules_path or os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                             "..", "rules", "rules.json")
     os.makedirs(out_dir, exist_ok=True)
-    stem = os.path.splitext(os.path.basename(img_path))[0]
+    # 产物 stem 用 naming 模块抽出"站名-图类型",比设计院图号清晰得多
+    stem = naming.product_stem(img_path)
+    print(f"[准备] 产物命名前缀: {stem}  (源: {os.path.basename(img_path)})")
 
     # 0) 比例尺标定 - 优先级:manual > pdf > review_required
     print("[0/4] 比例尺标定 ...")
@@ -295,11 +298,13 @@ def run(xml_path, img_path, out_dir, scale=None, station_meta=None, rules_path=N
     out_docx = os.path.join(out_dir, f"{stem}_审查意见表.docx")
     try:
         import mvp_report_docx
+        # 报告头部"工程名称"用站名(去掉图类型),如 "嘉宾站";没站名则用 stem
+        st = naming.extract_station(os.path.basename(img_path)) or stem
         mvp_report_docx.build(
             findings_path=os.path.join(out_dir, f"{stem}_findings.json"),
             annotated_img=out_jpg,
             out_docx=out_docx,
-            station_name=stem,
+            station_name=st,
             design_stage="初审 (AI 预审)",
             reviewer="AI 预审系统 (MVP)",
             source_pdf_name=os.path.basename(img_path),

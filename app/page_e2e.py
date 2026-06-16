@@ -1,11 +1,15 @@
 # -*- coding: utf-8 -*-
 """端到端预审页：拖入 PDF → ①识别 ②结构化 ③规范比对 ④原图标注。"""
-import os
+import os, sys
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QSpinBox, QSplitter, QLabel,
 )
 from ui_common import (card, h1, hint, section, PathRow, ImageViewer, LogConsole, ProcRunner)
+
+# 复用 tools/naming.py 的产物命名(必须与 mvp_e2e 一致,否则找不到产物文件)
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tools"))
+import naming
 
 TOOL = "tools/e2e_demo.py"          # 旧:PDF only(无 CVAT 时兜底)
 TOOL_MVP = "tools/mvp_e2e.py"       # 新:CVAT XML + PDF/jpg → 真值审查
@@ -92,7 +96,7 @@ class E2EPage(QWidget):
         out = self.out.text() or os.path.join(os.path.dirname(os.path.abspath(pdf)), "e2e_out")
         self._out_dir = out
         self._use_mvp = bool(xml)             # 记下走的哪条路径,影响 _on_finished 找产物名
-        self._pdf_stem = os.path.splitext(os.path.basename(pdf))[0]
+        self._pdf_stem = naming.product_stem(pdf)   # 与 mvp_e2e 共用命名规则,如 "嘉宾站-站厅层"
         self.report_btn.setEnabled(False)
         for l, s in zip(self.stage_labels, STAGES):
             l.setText("○  " + s)
