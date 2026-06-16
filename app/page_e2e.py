@@ -93,25 +93,74 @@ class E2EPage(QWidget):
         xml = self.xml.text()
         if not pdf:
             self.log.append_text("⚠️ 请先选择矢量 PDF。\n"); return
+
+        # ★ 关键改动:用户没手填 CVAT XML 时,自动在仓库 data/anno_*/ 下找匹配的标注。
+        #   命中即走 mvp_e2e 真值路径,UI 提示已自动匹配;找不到才退回旧路径。
+        #   这是用户痛点修复:之前不填 XML 默认走旧路径 → 产物文件名是旧的 e2e_annotated.xxx。
+        if not xml:
+            xml = self._auto_find_xml(pdf)
+            if xml:
+                self.log.append_text(f"[自动匹配] 找到 CVAT 标注: {xml}\n  走真值路径(mvp_e2e)\n")
+                self.xml.set_text(xml)        # 同步到 UI,让用户看到
+            else:
+                self.log.append_text("[自动匹配] 未在 data/anno_*/ 下找到匹配的 CVAT 标注\n"
+                                     "  → 走兜底路径(e2e_demo),只能查防火分区面积\n")
+
         out = self.out.text() or os.path.join(os.path.dirname(os.path.abspath(pdf)), "e2e_out")
         self._out_dir = out
-        self._use_mvp = bool(xml)             # 记下走的哪条路径,影响 _on_finished 找产物名
-        self._pdf_stem = naming.product_stem(pdf)   # 与 mvp_e2e 共用命名规则,如 "嘉宾站-站厅层"
+        self._use_mvp = bool(xml)
+        self._pdf_stem = naming.product_stem(pdf)
         self.report_btn.setEnabled(False)
         for l, s in zip(self.stage_labels, STAGES):
             l.setText("○  " + s)
 
         if xml:
-            # ===== 新路径:mvp_e2e (真值审查) =====
             self.log.banner("端到端预审开始 [真值路径 mvp_e2e]")
             self._set_running(True)
-            # mvp_e2e <xml> <底图(支持 PDF)> <out> --pdf <pdf,自动算 scale>
             self.runner.run(TOOL_MVP, [xml, pdf, out, "--pdf", pdf])
         else:
-            # ===== 旧路径:e2e_demo (无标注兜底) =====
             self.log.banner("端到端预审开始 [兜底路径 e2e_demo,无真值标注]")
             self._set_running(True)
             self.runner.run(TOOL, [pdf, out, "--page", self.page.value(), "--dpi", self.dpi.value()])
+
+    def _auto_find_xml(self, pdf_path):
+        """根据 PDF 文件名 stem,在仓库 data/anno_hall/ / anno_site/ 等目录下找匹配的 CVAT XML。
+
+        匹配逻辑: 打开候选 XML 的 image name,看是否含 PDF 的关键词 (站名 / 站厅层 / 总平面)。
+        命中即返回路径;不命中返回 None。
+        """
+        import glob, xml.etree.ElementTree as ET
+        from naming import extract_station, extract_kind
+        st = extract_station(os.path.basename(pdf_path))
+        kind = extract_kind(os.path.basename(pdf_path))
+        if not st:
+            return None
+        # 在项目 data/ 下递归找 annotations.xml
+        roots = [
+            os.path.join(self.cwd, "data"),
+            os.path.dirname(os.path.dirname(os.path.abspath(pdf_path))),  # 兼容用户拷贝整套数据到别处
+        ]
+        candidates = []
+        for root in roots:
+            if root and os.path.isdir(root):
+                candidates += glob.glob(os.path.join(root, "**", "annotations.xml"), recursive=True)
+                candidates += glob.glob(os.path.join(root, "**", "*.xml"), recursive=True)
+        # 按 image name 匹配。站名带"站"和不带"站"都试,兼容 CVAT 里命名不带"站"的情况(如"明海")
+        st_short = st.rstrip("站")
+        for xml_path in sorted(set(candidates)):
+            try:
+                root = ET.parse(xml_path).getroot()
+            except Exception:
+                continue
+            for im in root.findall(".//image"):
+                name = im.get("name") or ""
+                station_hit = (st in name) or (st_short and st_short in name)
+                kind_hit = (not kind) or (kind in name) or \
+                           ("站厅" in name and kind == "站厅层") or \
+                           ("平面图" in name and kind == "总平面图")
+                if station_hit and kind_hit:
+                    return xml_path
+        return None
 
     def _light(self, i):
         self.stage_labels[i].setText("●  " + STAGES[i])
