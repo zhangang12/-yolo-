@@ -158,9 +158,12 @@ def annotate_failures(img, image_node, structured, findings, fail_only=True):
 
     annotated = img.copy()
     by_target = {}
+    global_fails = []    # ★ target_id 为空的违规(如 station 全局对象,EXIT-NUM-PUB 等)
     for f in findings:
         tid = f.get("target_id")
         if not tid:
+            if f.get("passed") is False or f.get("review_required"):
+                global_fails.append(f)
             continue
         by_target.setdefault(tid, []).append(f)
 
@@ -195,6 +198,38 @@ def annotate_failures(img, image_node, structured, findings, fail_only=True):
         short = first_fail["rule_id"]
         annotated = _put_chinese(annotated, f"{tid} {short}", label_pos, col, font_size=26)
         rendered_labels += 1
+
+    # ★ 全局违规徽章(没具体坐标的 FAIL,如 station 整体规则:出口数/商铺数量等)
+    # 画在右上角,确保任何图都能在视觉上看到这些违规存在,不会被静默跳过
+    if global_fails:
+        import cv2
+        H, W = annotated.shape[:2]
+        # 徽章宽 = 图宽 30%(min 800),高度按条数 + 表头算
+        bw = max(800, int(W * 0.30))
+        line_h = 38
+        bh = 70 + line_h * (len(global_fails) + 1)   # 70 = 标题区
+        bx0 = W - bw - 40
+        by0 = 40
+        # 半透明白底 + 红框
+        overlay = annotated.copy()
+        cv2.rectangle(overlay, (bx0, by0), (bx0 + bw, by0 + bh), (255, 255, 255), -1)
+        cv2.addWeighted(overlay, 0.92, annotated, 0.08, 0, annotated)
+        cv2.rectangle(annotated, (bx0, by0), (bx0 + bw, by0 + bh), COL_FAIL, 4)
+        # 标题
+        annotated = _put_chinese(annotated,
+                                 f"⚠ 全局违规 {len(global_fails)} 条(无具体位置)",
+                                 (bx0 + 16, by0 + 12), COL_FAIL, font_size=30)
+        # 每条违规一行:序号 + 规则名 + 关键数值
+        for i, f in enumerate(global_fails):
+            ymsg = by0 + 70 + i * line_h
+            label = f"#{i+1} {f.get('name', f.get('rule_id', ''))}: "
+            msg = f.get("message", "")
+            # 截断过长的 message
+            if len(msg) > 60:
+                msg = msg[:58] + "…"
+            annotated = _put_chinese(annotated, label + msg,
+                                     (bx0 + 20, ymsg), (40, 40, 40), font_size=22)
+            rendered_labels += 1
 
     return annotated, rendered_labels
 
