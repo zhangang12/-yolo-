@@ -237,13 +237,34 @@ def annotate_failures(img, image_node, structured, findings, fail_only=True):
 # ---------- 主流程 ----------
 
 def run(xml_path, img_path, out_dir, scale=None, station_meta=None, rules_path=None,
-        pdf_path=None):
+        pdf_path=None, yolo_weights=None, yolo_conf=0.25, yolo_iou=0.5,
+        yolo_tile=1024, yolo_overlap=128, yolo_device="0"):
+    """端到端入口。
+    数据源优先级:
+      1) xml_path: CVAT 真值标注(最准,审查员标好的)
+      2) yolo_weights: 用 best.pt 跑 sahi 推理 → 转成临时 CVAT XML 再走全流程
+    两者都未提供 → 抛错(让客户端走 e2e_demo 兜底)。
+    """
     rules_path = rules_path or os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                             "..", "rules", "rules.json")
     os.makedirs(out_dir, exist_ok=True)
     # 产物 stem 用 naming 模块抽出"站名-图类型",比设计院图号清晰得多
     stem = naming.product_stem(img_path)
     print(f"[准备] 产物命名前缀: {stem}  (源: {os.path.basename(img_path)})")
+
+    # ★ 数据源决策: CVAT 真值优先,否则用 YOLO 自动识别生成临时 CVAT
+    if not xml_path:
+        if yolo_weights:
+            print(f"[准备] 未提供 CVAT 标注,用 YOLO 自动识别: {yolo_weights}")
+            import yolo_to_cvat
+            tmp_xml = os.path.join(out_dir, f"{stem}_yolo_auto.xml")
+            yolo_to_cvat.yolo_to_cvat(yolo_weights, img_path, tmp_xml,
+                                      conf=yolo_conf, iou=yolo_iou,
+                                      tile=yolo_tile, overlap=yolo_overlap,
+                                      device=yolo_device)
+            xml_path = tmp_xml
+        else:
+            raise ValueError("必须提供 xml_path(CVAT 真值)或 yolo_weights(自动识别)之一")
 
     # 0) 比例尺标定 - 优先级:manual > pdf > review_required
     print("[0/4] 比例尺标定 ...")
@@ -354,8 +375,9 @@ def run(xml_path, img_path, out_dir, scale=None, station_meta=None, rules_path=N
 
 
 def main():
-    ap = argparse.ArgumentParser(description="MVP 端到端 (CVAT + 底图 → 标注违规位置)")
-    ap.add_argument("xml")
+    ap = argparse.ArgumentParser(description="MVP 端到端 (CVAT 或 YOLO + 底图 → 标注违规位置)")
+    ap.add_argument("xml", nargs="?", default="",
+                   help="CVAT 标注 XML 路径;留空字符串则必须传 --yolo-weights")
     ap.add_argument("img")
     ap.add_argument("out")
     ap.add_argument("--scale", type=float, default=None,
@@ -363,9 +385,19 @@ def main():
     ap.add_argument("--pdf", default=None,
                    help="矢量 PDF 路径;从中自动读 1:N 比例 + 与 jpg 大小算 m/px")
     ap.add_argument("--station-meta", default=None)
+    ap.add_argument("--yolo-weights", default=None,
+                   help="YOLO best.pt 路径;无 CVAT 标注时用 sahi 自动识别")
+    ap.add_argument("--yolo-conf", type=float, default=0.25)
+    ap.add_argument("--yolo-iou", type=float, default=0.5)
+    ap.add_argument("--yolo-tile", type=int, default=1024)
+    ap.add_argument("--yolo-overlap", type=int, default=128)
+    ap.add_argument("--yolo-device", default="0")
     a = ap.parse_args()
     sm = json.load(open(a.station_meta, encoding="utf-8")) if a.station_meta else None
-    run(a.xml, a.img, a.out, scale=a.scale, station_meta=sm, pdf_path=a.pdf)
+    xml = a.xml if a.xml else None
+    run(xml, a.img, a.out, scale=a.scale, station_meta=sm, pdf_path=a.pdf,
+        yolo_weights=a.yolo_weights, yolo_conf=a.yolo_conf, yolo_iou=a.yolo_iou,
+        yolo_tile=a.yolo_tile, yolo_overlap=a.yolo_overlap, yolo_device=a.yolo_device)
 
 
 if __name__ == "__main__":
