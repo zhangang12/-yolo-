@@ -298,6 +298,75 @@ def run(xml_path, img_path, out_dir, scale=None, station_meta=None, rules_path=N
           f"exit={len(structured['exit'])}  shop={len(structured['shop'])}  "
           f"evac={len(structured['evac_distance_line'])}")
 
+    # 1.5) 疏散路径(A* / Dijkstra)— 自动算"任一点至最近出口"最远距离
+    # 把派生的 evac_distance_line 注入 structured,让 EVAC-DIST-ANY-001 真正可跑
+    print("[1.5/4] 疏散路径计算 (多源 Dijkstra)...")
+    if scale:
+        try:
+            import evac_path
+            # 从 CVAT XML 重新拿 source shapes(adapter 丢失了原 polygon)
+            from anno_to_structured import parse_cvat as _parse_cvat
+            _images = _parse_cvat(xml_path)
+            _src_img = None
+            for _im in _images:
+                if _im["name"] == img_basename or img_stem in _im["name"]:
+                    _src_img = _im; break
+            if _src_img:
+                evac_result = evac_path.add_evac_to_structured(
+                    structured, _src_img["shapes"], scale,
+                    (int(_src_img["W"]), int(_src_img["H"])))
+                if evac_result:
+                    print(f"  ✅ 最远疏散距离: {evac_result['max_distance_m']}m  "
+                          f"(最远点 {evac_result['farthest_point_px']} → "
+                          f"最近出口 {evac_result['nearest_exit_id']})")
+                    # 把最远点存到 image_node 上下文,标注图阶段画出来
+                    structured["_evac_farthest_px"] = evac_result["farthest_point_px"]
+                else:
+                    print("  ⏭ 跳过(无 public_area 多边形或出口)")
+        except Exception as e:
+            print(f"  ⚠️ 疏散路径计算失败: {e}")
+    else:
+        print("  ⏭ 跳过(scale 未标定)")
+
+    # 1.6) 栅格 OCR 兜底 — 对 area_m2_design 为空的 fire_compartment, 用 tesseract
+    #      在 fc polygon 内找数字补上。栅格 PDF + 无矢量文字层时也能拿到面积。
+    fcs_no_area = [fc for fc in structured.get("fire_compartment", [])
+                   if not fc.get("area_m2_design")]
+    if fcs_no_area:
+        print(f"[1.6/4] 栅格 OCR 兜底 ({len(fcs_no_area)}/{len(structured['fire_compartment'])} "
+              f"个 fc 缺 area_m2_design)...")
+        try:
+            import raster_ocr
+            from PIL import Image
+            # 派生 fc 的 polygon 索引(adapter 没存 polygon,这里从 CVAT shapes 重派生)
+            from anno_to_structured import parse_cvat as _parse_cvat2
+            _images2 = _parse_cvat2(xml_path)
+            _src_img2 = None
+            for _im in _images2:
+                if _im["name"] == img_basename or img_stem in _im["name"]:
+                    _src_img2 = _im; break
+            if _src_img2:
+                fc_records = []
+                fc_idx = 0
+                for s in _src_img2["shapes"]:
+                    if s["label"] == "fire_compartment" and s["geom"] == "polygon" \
+                       and len(s["points"]) >= 3 and fc_idx < len(structured["fire_compartment"]):
+                        fc_records.append({
+                            "id": structured["fire_compartment"][fc_idx]["id"],
+                            "polygon_pts": s["points"],
+                        })
+                        fc_idx += 1
+                # 读底图(中文路径安全, 同 _imread)
+                img_arr = _imread(img_path)
+                if img_arr is not None:
+                    pil_img = Image.fromarray(img_arr[:, :, ::-1])  # BGR→RGB
+                    filled = raster_ocr.fill_area_m2_design(structured, fc_records, pil_img, verbose=True)
+                    print(f"  ✅ OCR 补全 area_m2_design: {filled} 个 fc")
+                else:
+                    print("  ⏭ 读底图失败,跳过 OCR")
+        except Exception as e:
+            print(f"  ⚠️ OCR 兜底失败(不阻塞): {e}")
+
     # 2) 规则引擎
     print("[2/4] 规则引擎评估 ...")
     findings = rule_engine.evaluate(rules_path, structured)
