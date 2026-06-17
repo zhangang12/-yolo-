@@ -21,18 +21,17 @@ fire-review-mvp/
 │       ├── prelabel_pro.py   增强预标注（语义细分+内容+可审核）
 │       ├── build_dataset.py  CVAT 标注 → YOLO-seg 数据集
 │       └── train_yolo.py     ultralytics 训练/评估封装
-├── tools/
-│   ├── fire_anno_tool.py   标注三件套：转换 / 质检 / 预标注
-│   ├── e2e_demo.py         端到端流程 demo（接 rule_engine）
-│   ├── fangju_demo.py      防火间距比对 demo（出入口/风亭→周边建筑）
-│   └── e2e_steps.py        分步执行版（受限环境用）
-└── docs/
-    ├── label_schema.md             标注标签 schema（类别/属性/枚举）
-    ├── annotation_issues_整改单.md  标注数据问题清单（发给标注单位）
-    ├── rule_engine_notes.md        《消防检查规则》评审与规则引擎设计
-    ├── yolo_training_guide.md      YOLO 训练流程
-    ├── 任务分工_标注vs矢量直抽.md    哪些标注团队标、哪些程序直抽
-    └── 标注规范说明_详细版.md        给标注团队的详细标注规范(另有docx)
+├── tools/                  命令行脚本(模块索引见 tools/README.md)
+│   ├── mvp_e2e.py          ★ 端到端一条命令(CVAT 或 YOLO)
+│   ├── mvp_report_docx.py  ★ 仿真实审查表 Word 报告
+│   ├── rule_engine.py        规则引擎(37 条)
+│   ├── evac_path.py          疏散路径(多源 Dijkstra)
+│   ├── fire_anno_tool.py     标注三件套：转换 / 质检 / 预标注
+│   └── legacy/               已归档的早期脚本(e2e_steps / fangju_demo …)
+└── docs/                   文档(已分类归档)
+    ├── guides/                操作指南(client/scripts/prelabel/yolo 训练)
+    ├── reference/             规范参考(label_schema / rule_engine_notes / 标注规范)
+    └── archive/               历史过程文档(任务分工 / annotation_issues_整改单)
 ```
 
 ## 安装
@@ -90,7 +89,7 @@ python app/backend/prelabel_pro.py  矢量图纸.pdf  输出目录  --type hall 
 python tools/fire_anno_tool.py all  标注.xml
 ```
 
-> 预标注详细原理、参数、OCR 安装、人工确认流程见 **[docs/prelabel_guide.md](docs/prelabel_guide.md)**。
+> 预标注详细原理、参数、OCR 安装、人工确认流程见 **[docs/guides/prelabel_guide.md](docs/guides/prelabel_guide.md)**。
 
 质检能自动报出的典型问题：非法/中文标签、`.`等垃圾属性键、必填空值、枚举越界、必现类缺失（如周边建筑=0）、商铺超规范上限、设备区分区漏标等。
 
@@ -138,7 +137,7 @@ python tools/e2e_demo.py  图纸.pdf  输出目录  --page 0 --dpi 200
 | 出入口/风亭→周边高层民用建筑防火间距 | ≥ 9m | GB 50016-2014 表5.2.2 |
 | 出入口→加油加气加氢站安全间距 | ≥ 50m | GB 50156-2021 4.0.4 |
 
-三项检查（防火分区面积 / 疏散距离 / 防火间距）均由 `tools/rule_engine.py` + `rules/rules.json` 统一驱动。完整规则与冲突处理见 `docs/rule_engine_notes.md`。
+三项检查（防火分区面积 / 疏散距离 / 防火间距）均由 `tools/rule_engine.py` + `rules/rules.json` 统一驱动。完整规则与冲突处理见 `docs/reference/rule_engine_notes.md`。
 
 ## 依赖与环境
 

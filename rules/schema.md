@@ -54,7 +54,7 @@
 | `evac_distance_line` polyline + `text_content` / `pair_id` 属性 | `evac_distance_line` | `length_m` ← 折线像素累计长度 × 图纸比例尺；`kind` 派生：终点最近的实体 = `safety_exit` → `any_to_exit`；终点是房间门 + 位置 = `between_exits` → `door_to_exit_between`；终点是房间门 + `dead_end` → `door_to_exit_deadend` |
 | `safety_exit` box + `pair_id` 属性 | `exit` | `leads_to`：终点在地面图（站点出入口所在层）则 `ground`，否则 `other`；`zone` ← 该 safety_exit 所在 `fire_compartment.zone_type`；`direction_group` 用方位角聚类（同 ±15° 方向算一组） |
 
-标注团队**只关心源对象层**，详见 [`docs/标注规范说明_详细版.md`](../docs/标注规范说明_详细版.md)。规则编辑者**只关心消费对象层**（上面那张主表）。
+标注团队**只关心源对象层**，详见 [`docs/reference/标注规范说明_详细版.md`](../docs/reference/标注规范说明_详细版.md)。规则编辑者**只关心消费对象层**（上面那张主表）。
 
 ## 四、`applies_when` 条目
 

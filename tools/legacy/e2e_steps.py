@@ -6,7 +6,7 @@
   step asm    : 装配 结构化/比对/标注                                -> 产物
 """
 import sys, os, json, io, re, pickle
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # 归档到 legacy/ 后指向上级 tools/
 import e2e_demo as E
 
 PDF = "/sessions/wonderful-trusting-cori/mnt/uploads/图纸.pdf"

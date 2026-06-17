@@ -10,7 +10,7 @@
         [--imgsz 1024] [--batch 8] [--patience 20] [--project runs] [--name exp] [--device ""]
   python train_yolo.py val    <data.yaml>  --weights runs/exp/weights/best.pt [--imgsz 1024]
 
-要点（与 docs/yolo_training_guide.md 一致）：
+要点（与 docs/guides/yolo_training_guide.md 一致）：
   - 从预训练权重迁移学习，别从零训。
   - 目标小，imgsz 要大(1024)，配合切片。
   - patience 早停；评估看每类 P/R 与 mAP50。

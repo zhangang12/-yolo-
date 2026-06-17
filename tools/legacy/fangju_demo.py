@@ -9,7 +9,7 @@ import sys, os, re, json, argparse
 import xml.etree.ElementTree as ET
 from shapely.geometry import Polygon, LineString
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # 归档到 legacy/ 后指向上级 tools/
 import rule_engine
 
 DEFAULT_RULES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "rules", "rules.json")

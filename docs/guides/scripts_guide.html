@@ -51,9 +51,9 @@
 <ol>
   <li><a href="#overview">脚本总览 + 端到端工作流</a></li>
   <li><a href="#anno">标注阶段:fire_anno_tool / prelabel_pro</a></li>
-  <li><a href="#geom">几何与结构化:geom_measure / scale_calibrate / anno_to_structured</a> <span class="badge new">2026-06</span></li>
+  <li><a href="#geom">几何与结构化:geom_measure / scale_calibrate / anno_to_structured / evac_path / raster_ocr</a> <span class="badge new">2026-06</span></li>
   <li><a href="#rule">规则引擎:rule_engine</a></li>
-  <li><a href="#e2e">端到端:mvp_e2e / mvp_batch / e2e_demo / fangju_demo</a></li>
+  <li><a href="#e2e">端到端:mvp_e2e / mvp_batch / e2e_demo</a></li>
   <li><a href="#yolo">YOLO 训练:build_dataset / train_yolo / sahi_predict</a></li>
   <li><a href="#report">报告导出:report_docx</a></li>
   <li><a href="#vector">矢量层直读:vector_extract</a></li>
@@ -87,12 +87,14 @@
 <tr><td><code>tools/scale_calibrate.py</code> <span class="badge new">新</span></td><td>从矢量 PDF 自动算 m/px</td><td>(单一入口)</td></tr>
 <tr><td><code>tools/geom_measure.py</code> <span class="badge new">新</span></td><td>比例尺标定 / 面积 / 净宽 / 距离</td><td>(单一入口)</td></tr>
 <tr><td><code>tools/anno_to_structured.py</code> <span class="badge new">新</span></td><td>CVAT → 规则引擎结构化对象(MVP 中枢)</td><td>(单一入口)</td></tr>
+<tr><td><code>tools/evac_path.py</code> <span class="badge new">2026-06</span></td><td>疏散路径:公共区栅格化 + 多源 Dijkstra</td><td>(单一入口)</td></tr>
+<tr><td><code>tools/raster_ocr.py</code> <span class="badge new">2026-06</span></td><td>栅格 OCR 兜底:几何匹配补防火分区面积</td><td>(单一入口)</td></tr>
 <tr><td><code>tools/rule_engine.py</code></td><td>规则引擎(读 rules.json 评估结构化数据)</td><td>--dry-run / --data</td></tr>
 <tr><td><code>tools/sahi_predict.py</code> <span class="badge new">新</span></td><td>切片推理(SAHI 风格),大图小目标</td><td>(单一入口)</td></tr>
 <tr><td><code>tools/mvp_e2e.py</code> <span class="badge new">新</span></td><td>端到端一条命令</td><td>(单一入口)</td></tr>
 <tr><td><code>tools/mvp_batch.py</code> <span class="badge new">新</span></td><td>批量端到端(整目录)</td><td>(单一入口)</td></tr>
-<tr><td><code>tools/e2e_demo.py</code></td><td>旧版 PDF 端到端(基于 vector_extract)</td><td>(单一入口)</td></tr>
-<tr><td><code>tools/fangju_demo.py</code></td><td>防火间距比对(总平面图专用)</td><td>(单一入口)</td></tr>
+<tr><td><code>tools/e2e_demo.py</code></td><td>旧版 PDF 端到端(基于 vector_extract,客户端 ④兜底)</td><td>(单一入口)</td></tr>
+<tr><td><code>tools/legacy/fangju_demo.py</code></td><td>防火间距比对 demo(已归档,功能并入 rule_engine)</td><td>(单一入口)</td></tr>
 <tr><td><code>tools/report_docx.py</code></td><td>导出 Word 审查报告</td><td>(单一入口)</td></tr>
 <tr><td><code>app/backend/build_dataset.py</code></td><td>CVAT → YOLO-seg 数据集</td><td>(单一入口)</td></tr>
 <tr><td><code>app/backend/train_yolo.py</code></td><td>YOLO 训练 / 评估</td><td>train / val</td></tr>
@@ -179,7 +181,7 @@ python tools/fire_anno_tool.py qc  标注.xml  --type hall   # 或 site / auto</
 <pre><code># 从 SCHEMA(LABELS+ENUMS)自动生成 CVAT 可导入的 labels.json
 python tools/fire_anno_tool.py export-cvat-labels  rules/cvat_labels.json</code></pre>
 <p>标注公司在 CVAT 项目设置 → Labels → 切到 Raw → 粘贴此文件 → Save。
-之后前端只能从下拉菜单选,根除错名标签。具体见 <code>docs/cvat_template_setup.md</code>。</p>
+之后前端只能从下拉菜单选,根除错名标签。具体见 <code>docs/guides/cvat_template_setup.md</code>。</p>
 
 <h3>2.2 prelabel_pro.py <span class="badge purple">增强版</span></h3>
 <pre><code># 语义细分 + 内容(OCR) + 置信度分级 + 确认清单 + 自检
@@ -260,6 +262,29 @@ product_stem("5╱17╱D01╱S╱S02╱COO╱QT╱010003╱A_车站-嘉宾站站
 </ul>
 <pre><code>python tools/anno_to_structured.py  标注.xml  --scale 0.0254  \
     --station-meta examples/station_meta.json  --out structured.json</code></pre>
+
+<h3>3.5 evac_path.py — 疏散路径(多源 Dijkstra) <span class="badge new">2026-06</span></h3>
+<p>MVP 任务第 5 项。把公共区多边形栅格化(downsample=20,1 cell≈20px),
+把每个安全出口标为 dist=0 多源,跑 8 邻接 + 对角线代价 √2 的 Dijkstra,
+取公共区内距离场最大值 = <strong>任一点至最近出口的最远疏散距离</strong>。
+结果作为派生 <code>EVAC-DERIVED-01</code> 注入 <code>evac_distance_line</code>,喂规则引擎 <code>EVAC-DIST-ANY-001</code>。</p>
+<pre><code>python tools/evac_path.py  标注.xml  --scale 0.0254  --downsample 20</code></pre>
+<div class="tip">
+依赖三者齐全:① <code>public_area</code>(或 zone=公共区的 <code>fire_compartment</code>)多边形
+② 比例尺 ③ <code>safety_exit</code> 出口点;缺一则跳过。
+算的是直线可达栅格距离,<strong>未扣墙体/柱子障碍</strong>。在 <code>mvp_e2e</code> 的 <code>[1.5/4]</code> 阶段自动调用。
+</div>
+
+<h3>3.6 raster_ocr.py — 栅格 OCR 兜底 <span class="badge new">2026-06</span></h3>
+<p>当矢量层无文字(栅格 PDF)、<code>vector_extract</code> 拿不到面积时的兜底。
+tesseract 只 OCR 数字 + 小数点(whitelist <code>0123456789.</code>,<strong>不依赖 chi_sim 中文包</strong>),
+按几何位置把数字落到对应 <code>fire_compartment</code> polygon 内,
+<code>require_decimal</code> 过滤 CAD 整数尺寸毫米噪声,同分区多值取中位数。</p>
+<pre><code>python tools/raster_ocr.py  图.jpg  [--psm 11]  [--min 200]  [--max 10000]</code></pre>
+<div class="tip">
+设计院面积常带小数(如 3861.71㎡),CAD 标注尺寸是整数毫米(如 15400)——
+靠"必须带小数"区分,避免把尺寸误当面积。在 <code>mvp_e2e</code> 的 <code>[1.6/4]</code> 阶段对缺面积的分区自动调用。
+</div>
 
 <hr>
 
@@ -344,10 +369,11 @@ PASS 1149 / FAIL 521 / REVIEW 741。站厅层平均 57 条 FAIL/图。
 <p>主走"矢量文字层直读防火分区"路线,适合<strong>没有 CVAT 标注</strong>的快速验证场景。
 新工作流推荐 <code>mvp_e2e.py</code>。</p>
 
-<h3>5.4 fangju_demo.py — 防火间距比对</h3>
-<pre><code>python tools/fangju_demo.py  标注.xml  总平面图.pdf  [输出目录]  \
+<h3>5.4 legacy/fangju_demo.py — 防火间距比对(已归档)</h3>
+<pre><code>python tools/legacy/fangju_demo.py  标注.xml  总平面图.pdf  [输出目录]  \
     --rules rules/rules.json</code></pre>
-<p>专用于总平面图:出入口/风亭 ↔ 周边建筑 防火间距判定。</p>
+<p>专用于总平面图:出入口/风亭 ↔ 周边建筑 防火间距判定。
+<strong>已归档</strong>:功能并入 <code>rule_engine</code> 的 <code>building_clearance</code> 规则,保留供追溯。</p>
 
 <hr>
 
