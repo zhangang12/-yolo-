@@ -34,7 +34,7 @@ def extract_numbers_with_pos(image_pil, psm=11, min_val=200, max_val=10000):
     from tesseract_init import ensure_tesseract
     ok, _ = ensure_tesseract()
     if not ok:
-        raise RuntimeError("Tesseract 未安装或探测失败 — 见 docs/client_guide.html §1.2")
+        raise RuntimeError("Tesseract 未安装或探测失败 — 见 docs/guides/client_guide.html §1.2")
 
     cfg = f'--psm {psm} -c tessedit_char_whitelist=0123456789.'
     data = pytesseract.image_to_data(image_pil, config=cfg,

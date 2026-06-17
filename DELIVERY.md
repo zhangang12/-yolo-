@@ -92,7 +92,7 @@ app/                                桌面客户端(PySide6)
     ├── train_yolo.py               训练/评估封装
     └── prelabel_pro.py             增强预标注
 
-tools/                              核心命令行
+tools/                              核心命令行(模块索引见 tools/README.md)
 ├── mvp_e2e.py             ★       端到端一条命令(CVAT 或 YOLO)
 ├── mvp_batch.py                   批量端到端(整目录)
 ├── mvp_report_docx.py    ★       仿真实审查表 Word 报告
@@ -101,29 +101,42 @@ tools/                              核心命令行
 ├── scale_calibrate.py             PDF 矢量层读 "1:N" → m/px
 ├── geom_measure.py                几何量测(面积/净宽/距离)
 ├── anno_to_structured.py          MVP 中枢:CVAT → 规则引擎对象
+├── evac_path.py          ★ 2026-06  疏散路径(多源 Dijkstra)
+├── raster_ocr.py         ★ 2026-06  栅格 OCR 兜底(防火分区面积)
+├── vector_extract.py              矢量层直读防火分区面积
 ├── rule_engine.py                 规则引擎(37 条)
 ├── naming.py                      产物命名(站名-图类型)
 ├── tesseract_init.py              Tesseract 自动探测
 ├── fire_anno_tool.py              标注五件套
-├── vector_extract.py              矢量层直读防火分区面积
-├── fangju_demo.py                 防火间距比对
-├── e2e_demo.py                    旧版 PDF 端到端(向后兼容)
-└── report_docx.py                 旧版报告(向后兼容)
+├── e2e_demo.py                    旧版 PDF 端到端(客户端 ④兜底仍引用)
+├── report_docx.py                 旧版报告(客户端仍引用)
+└── legacy/                        已归档(无人引用的早期脚本)
+    ├── e2e_steps.py               早期分步 e2e(沙箱限制产物)
+    ├── fangju_demo.py             防火间距比对 demo
+    └── replace_to_english.py      一次性中→英标签迁移脚本
 
 rules/                              规则知识库
 ├── rules.json                     37 条规则 / 8 大类
 ├── schema.md                      规则 schema 文档
 └── cvat_labels.json               CVAT 项目模板(锁死下拉)
 
-docs/                               文档
-├── client_guide.html       ★      客户端使用指南
-├── scripts_guide.html      ★      脚本使用指南
-├── yolo_incremental_training.html ★  YOLO 增量训练指南
-├── cvat_template_setup.md         CVAT 模板导入指引(给标注公司)
-├── label_schema.md                标注标签 schema
-├── rule_engine_notes.md           规则引擎评审与设计
-├── 标注规范说明_详细版.md         标注规范 v3(给标注团队)
-└── ...
+docs/                               文档(已分类归档)
+├── guides/                         操作指南(怎么用)
+│   ├── client_guide.html   ★       客户端使用指南
+│   ├── scripts_guide.html  ★       脚本使用指南
+│   ├── yolo_incremental_training.html ★  YOLO 增量训练指南
+│   ├── yolo_training_guide.md      YOLO 训练流程
+│   ├── prelabel_guide.md           预标注原理与流程
+│   └── cvat_template_setup.md      CVAT 模板导入(给标注公司)
+├── reference/                      规范/参考(是什么)
+│   ├── label_schema.md             标注标签 schema
+│   ├── rule_engine_notes.md        规则引擎评审与设计
+│   ├── 标注规范说明_详细版.md/.docx  标注规范 v3(给标注团队)
+│   ├── 消防检查规则.docx           规则知识库来源(保密,不入 git)
+│   └── Mvp任务.pdf                 需求说明(保密,不入 git)
+└── archive/                        历史/过程文档
+    ├── 任务分工_标注vs矢量直抽.md   分工:哪些标注、哪些直抽
+    └── annotation_issues_整改单.md  标注数据问题清单(发标注单位)
 
 examples/
 └── sample_structured.json         覆盖全规则分支的样例数据
@@ -176,7 +189,7 @@ e2e_out/
 
 - YOLO 训练数据仅 18 张图(9 站 × 站厅+总平面),稀有类(`safety_exit` 训练实例 = 4)mAP = 0
 - 客户对照表:`gate` 99% / `vent` 98% / `fire_door` 92% / `surrounding_building` 60% / `safety_exit` 0%
-- **解决路径**:按 [docs/yolo_incremental_training.html](docs/yolo_incremental_training.html) 增量补 8-10 个新站
+- **解决路径**:按 [docs/guides/yolo_incremental_training.html](docs/guides/yolo_incremental_training.html) 增量补 8-10 个新站
 
 ### 6.2 流程缺口
 
@@ -236,12 +249,13 @@ python tools/fire_anno_tool.py qc 标注.xml
 
 | 内容 | 文档 |
 |---|---|
-| **客户端 4 页用法 + 截图说明** | [docs/client_guide.html](docs/client_guide.html) |
-| **16 个脚本命令行 + 组合工作流** | [docs/scripts_guide.html](docs/scripts_guide.html) |
-| **YOLO 增量训练 + 基线指标** | [docs/yolo_incremental_training.html](docs/yolo_incremental_training.html) |
-| **CVAT 项目模板导入(给标注公司)** | [docs/cvat_template_setup.md](docs/cvat_template_setup.md) |
-| **标注规范 v3(给标注团队)** | [docs/标注规范说明_详细版.md](docs/标注规范说明_详细版.md) |
-| **规则引擎评审与设计** | [docs/rule_engine_notes.md](docs/rule_engine_notes.md) |
+| **tools/ 模块索引(活跃 / 归档一览)** | [tools/README.md](tools/README.md) |
+| **客户端 4 页用法 + 截图说明** | [docs/guides/client_guide.html](docs/guides/client_guide.html) |
+| **各脚本命令行 + 组合工作流** | [docs/guides/scripts_guide.html](docs/guides/scripts_guide.html) |
+| **YOLO 增量训练 + 基线指标** | [docs/guides/yolo_incremental_training.html](docs/guides/yolo_incremental_training.html) |
+| **CVAT 项目模板导入(给标注公司)** | [docs/guides/cvat_template_setup.md](docs/guides/cvat_template_setup.md) |
+| **标注规范 v3(给标注团队)** | [docs/reference/标注规范说明_详细版.md](docs/reference/标注规范说明_详细版.md) |
+| **规则引擎评审与设计** | [docs/reference/rule_engine_notes.md](docs/reference/rule_engine_notes.md) |
 | **规则 schema** | [rules/schema.md](rules/schema.md) |
 | **项目背景 + 进度 + 待办** | [HANDOFF.md](HANDOFF.md) |
 | **本文档** | [DELIVERY.md](DELIVERY.md) |
