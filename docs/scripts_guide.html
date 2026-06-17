@@ -228,6 +228,23 @@ python tools/geom_measure.py  标注.xml  --scale 0.0254  --out measure.json</co
 <tr><td><code>associate_width_lines(shapes)</code></td><td>width_line 关联最近的 fire_door / stair / gate</td></tr>
 </table>
 
+<h3>3.4 naming.py — 产物文件名标准化 <span class="badge new">2026-06</span></h3>
+<p>从图纸文件名(常含设计院图号、全角斜杠等噪声)抽出"站名 + 图类型",作为审查产物的简洁命名前缀。
+mvp_e2e 和客户端 page_e2e 共用,保证产物命名一致。</p>
+<pre><code>python tools/naming.py    # 自测 9 个真实样本
+
+# Python API
+from naming import product_stem
+product_stem("5╱17╱D01╱S╱S02╱COO╱QT╱010003╱A_车站-嘉宾站站厅层平面示意图.pdf")
+# → "嘉宾站-站厅层"</code></pre>
+<p><strong>三层抽取链</strong>:</p>
+<ol>
+  <li><code>_KNOWN_STATIONS</code>(已知站名 token 表,精度 100%):明海/珠光/贝尔路/黄君山/上油松/石龙/侨社/嘉宾/欧洲城</li>
+  <li>中文正则兜底:2-5 字"X站"(排除"车站"、"号X站"误匹配)</li>
+  <li>图类型:总平面图/站厅层/站台层/平面图/平面布置图/全局平面图</li>
+</ol>
+<p><strong>扩展新站</strong>:只改 <code>tools/naming.py</code> 第 14 行的 <code>_KNOWN_STATIONS</code> 列表(追加),mvp_e2e 和客户端立刻生效。</p>
+
 <h3>3.3 anno_to_structured.py — MVP 中枢适配器</h3>
 <p><strong>这是规则引擎能跑真实数据的关键</strong>。把 CVAT 源标注 →
 <code>rules/schema.md</code> 定义的全部消费对象:</p>
@@ -280,23 +297,38 @@ python tools/rule_engine.py  rules/rules.json  --data structured.json</code></pr
 <h2 id="e2e">5. 端到端</h2>
 
 <h3>5.1 mvp_e2e.py — 一条命令 <span class="badge new">推荐</span></h3>
-<pre><code># 自动从 PDF 算 scale
-python tools/mvp_e2e.py  annotations.xml  底图.jpg  输出目录  --pdf 矢量.pdf
+<p>支持<strong>两种数据源</strong>:① CVAT 真值标注;② YOLO 模型自动识别(经 yolo_to_cvat 转成临时 CVAT 后走全套流程)。</p>
+<pre><code># 方式①:CVAT 真值标注
+python tools/mvp_e2e.py  annotations.xml  底图.pdf  输出目录  --pdf 底图.pdf
 
-# 或手动 scale
-python tools/mvp_e2e.py  annotations.xml  底图.jpg  输出目录  --scale 0.0254
+# 方式②:YOLO 自动识别(第一个位置参数留空字符串)
+python tools/mvp_e2e.py  ""  底图.pdf  输出目录  --pdf 底图.pdf  \
+    --yolo-weights best.pt  --yolo-conf 0.25  --yolo-device 0
 
-# 带站点级配置(transfer_lines / project_all_doors_class_A 等)
-python tools/mvp_e2e.py  annotations.xml  底图.jpg  输出目录  \
-    --pdf 矢量.pdf  --station-meta examples/station_meta.json</code></pre>
+# 手动 scale + 站点级配置(可选)
+python tools/mvp_e2e.py  annotations.xml  底图.pdf  输出目录  \
+    --scale 0.0254  --station-meta examples/station_meta.json</code></pre>
 
-<p><strong>产物</strong>(输出目录下):</p>
-<ul>
-  <li><code>&lt;stem&gt;_e2e_fail.jpg</code> — 标注图(红框 + 中文规则编号,所有 FAIL 位置)</li>
-  <li><code>&lt;stem&gt;_structured.json</code> — 结构化数据</li>
-  <li><code>&lt;stem&gt;_findings.json</code> — 全部规则评估结果</li>
-  <li><code>&lt;stem&gt;_report.md</code> — Markdown 报告(按规则分类的违规清单)</li>
-</ul>
+<p><strong>新参数</strong>:</p>
+<table>
+<tr><th>参数</th><th>说明</th></tr>
+<tr><td><code>--yolo-weights</code></td><td>best.pt 路径。提供后,xml 留空字符串即可走 YOLO 路径</td></tr>
+<tr><td><code>--yolo-conf</code></td><td>YOLO 置信度阈值(默认 0.25)</td></tr>
+<tr><td><code>--yolo-iou</code></td><td>NMS IoU 阈值(默认 0.5)</td></tr>
+<tr><td><code>--yolo-tile</code> / <code>--yolo-overlap</code></td><td>切片大小/重叠(默认 1024 / 128)</td></tr>
+<tr><td><code>--yolo-device</code></td><td>GPU 设备号(默认 0;CPU 用 "cpu")</td></tr>
+</table>
+
+<p><strong>产物</strong>(命名前缀由 naming.product_stem 算,如 <code>嘉宾站-站厅层_xxx</code>):</p>
+<table>
+<tr><th>文件</th><th>说明</th></tr>
+<tr><td><code>&lt;stem&gt;_e2e_fail.jpg</code></td><td>底图 + 红框 FAIL + 右上角"全局违规"徽章</td></tr>
+<tr><td><code>&lt;stem&gt;_structured.json</code></td><td>12 类规则消费对象</td></tr>
+<tr><td><code>&lt;stem&gt;_findings.json</code></td><td>规则评估完整结果</td></tr>
+<tr><td><code>&lt;stem&gt;_report.md</code></td><td>Markdown 简报</td></tr>
+<tr><td><code>&lt;stem&gt;_审查意见表.docx</code> ⭐</td><td>仿真实审查报告格式的可交付 Word(自动调 mvp_report_docx 生成)</td></tr>
+<tr><td><code>&lt;stem&gt;_yolo_auto.xml</code> (仅方式②)</td><td>YOLO 推理转出的临时 CVAT</td></tr>
+</table>
 
 <h3>5.2 mvp_batch.py — 批量(整个站点目录) <span class="badge new">新</span></h3>
 <pre><code>python tools/mvp_batch.py  底图目录  XML目录  PDF根目录  输出目录</code></pre>
@@ -360,18 +392,54 @@ python app/backend/train_yolo.py  val  data.yaml  \
 
 <h3>6.3 sahi_predict.py — 切片推理 <span class="badge new">新</span></h3>
 <p><strong>解决</strong>:大图(14000×3300)直接缩到 1024 后小目标(防火门、闸机)大量漏检。</p>
-<pre><code>python tools/sahi_predict.py  best.pt  图.jpg  \
+<pre><code>python tools/sahi_predict.py  best.pt  图.pdf  \
     --tile 1024  --overlap 128  --conf 0.25 --iou 0.5  \
     --out 输出目录</code></pre>
 <p><strong>实测对比</strong>:嘉宾站站厅层(9395×3339)— 整图缩 1024 推理 = 1 个对象;
 切片推理(44 块) = 114 个对象。<strong>数量级飞跃</strong>。</p>
+<p><strong>输入支持 PDF</strong>:检测到 .pdf 后缀自动 fitz 200DPI 渲染,中文路径安全。</p>
+
+<h3>6.4 yolo_to_cvat.py — YOLO 预测转 CVAT XML <span class="badge new">2026-06</span></h3>
+<p><strong>定位</strong>:把 best.pt 真正接入 mvp_e2e 端到端流程的适配器。
+内部调 sahi_predict 切片推理,再把 detection list 转成 CVAT 1.1 XML(label / box / polygon
+与 anno_to_structured 完全一致),下游 mvp_e2e 当 CVAT 真值喂入。</p>
+<pre><code>python tools/yolo_to_cvat.py  best.pt  底图.pdf  输出.xml  \
+    --conf 0.25 --iou 0.5 --tile 1024 --overlap 128 --device 0</code></pre>
+<p><strong>YOLO 识别不到的必填属性</strong>(<code>LABEL_DEFAULT_ATTRS</code>)自动赋默认值:</p>
+<ul>
+  <li><code>fire_door.class = unknown</code> / <code>swing_dir = 顺着疏散方向</code></li>
+  <li><code>fire_compartment.zone_type = 公共区</code></li>
+  <li><code>surrounding_building.building_type = unknown</code> / <code>fire_rating = unknown</code></li>
+  <li><code>vent_group_ground.discharge_type = unknown</code></li>
+</ul>
+<p>规则引擎对这些 unknown 走 <code>review_required</code>(待人工复核)而不是硬判 FAIL — 这是<strong>正确行为</strong>。</p>
+<p>客户端调用:<code>mvp_e2e.py "" 底图.pdf out --yolo-weights best.pt</code> 内部就走这条路径。</p>
 
 <hr>
 
-<h2 id="report">7. 报告导出 report_docx.py</h2>
+<h2 id="report">7. 报告导出</h2>
+
+<h3>7.1 mvp_report_docx.py — 仿真实审查报告格式 <span class="badge new">推荐</span></h3>
+<p>仿照真实"消防设计文件审查意见表"(参考 J2025-004 系列)格式,产出可交付的 Word 文档:</p>
+<pre><code>python tools/mvp_report_docx.py  findings.json  e2e_fail.jpg  out.docx  \
+    --station-name "嘉宾站(站厅层)"  --design-stage "初审 (AI 预审)"  \
+    --source-pdf-name "嘉宾站站厅层平面示意图.pdf"</code></pre>
+<p><strong>docx 内含 6 块</strong>:</p>
+<ol>
+  <li>标题"消防设计图纸 AI 预审意见表" + 副标题(自动生成,供审查参考,不替代法定审查结论)</li>
+  <li>基本信息表 4×4(工程名/审查阶段/图纸文件/审查日期/审查人系统/规则引擎版本/数据来源/审查范围)</li>
+  <li>审查结论(总检查项/通过/不合规/待人工复核,带颜色,粗体结论)</li>
+  <li>不合规明细表 6 列:<strong>序号 | 图上编号 | 中文审查意见 | 规范出处 | 设计回复(空) | 复核情况(□通过 □不通过)</strong></li>
+  <li>嵌入标注图(对应"图上编号"列)</li>
+  <li>说明与免责</li>
+</ol>
+<p><strong>中文规则映射</strong>:30+ 条规则的英文 rule_id 映射到中文人话审查意见模板,如:</p>
+<pre><code>WIDTH-DOOR-EVAC-001 → "{tid} 疏散门净宽 {value}m,不满足规范要求 ≥{threshold}m,应加大门洞宽度。"</code></pre>
+<p><code>mvp_e2e</code> 末尾自动调用本工具产出 <code>&lt;stem&gt;_审查意见表.docx</code>,无需单独跑。</p>
+
+<h3>7.2 report_docx.py — 旧版报告(兼容)</h3>
 <pre><code>python tools/report_docx.py  e2e_输出目录</code></pre>
-<p>把 e2e 的产出(结构化 JSON + 标注图)汇编成 Word 报告:封面 / 结论 / 逐条检查表 / 标注图 / 免责声明。
-依赖 <code>python-docx</code>。</p>
+<p>旧版 e2e_demo 产物对应的 Word 报告生成器。新流程已被 mvp_report_docx 取代,仅保留向后兼容。</p>
 
 <hr>
 
