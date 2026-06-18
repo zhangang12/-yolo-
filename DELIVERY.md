@@ -4,7 +4,7 @@
 
 **MVP 状态**:✅ 端到端全流程跑通(CVAT 真值路径 + YOLO 自动识别路径双通路) · ✅ 客户端 4 页可用 · ✅ 规则引擎 37 条 8 大类 · ✅ 5 个产物自动生成。
 
-**交付时间**:2026-06 · **接手人先读本文档**(30 分钟上手),细节再翻 [HANDOFF.md](HANDOFF.md) 和 [docs/](docs/) 下分类文档。
+**交付时间**:2026-06 · **接手人先读本文档**(30 分钟上手),细节再翻 [docs/](docs/) 下分类文档。
 
 ---
 
@@ -257,13 +257,4 @@ python tools/fire_anno_tool.py qc 标注.xml
 | **标注规范 v3(给标注团队)** | [docs/reference/标注规范说明_详细版.md](docs/reference/标注规范说明_详细版.md) |
 | **规则引擎评审与设计** | [docs/reference/rule_engine_notes.md](docs/reference/rule_engine_notes.md) |
 | **规则 schema** | [rules/schema.md](rules/schema.md) |
-| **项目背景 + 进度 + 待办** | [HANDOFF.md](HANDOFF.md) |
-| **本文档** | [DELIVERY.md](DELIVERY.md) |
-
----
-
-## 十、联系
-
-数据/权重保密,需向项目负责人索取。代码已 push 到 GitHub origin/main,clone 即可上手。
-
-*本文档由项目交付审计自动汇总,真实反映 2026-06 交付时的代码状态。最新功能见 git log。*
+| **本文档(交付总览 / 进度 / 待办)** | [DELIVERY.md](DELIVERY.md) |
