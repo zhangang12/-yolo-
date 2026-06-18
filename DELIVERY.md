@@ -142,13 +142,18 @@ examples/
 └── sample_structured.json         覆盖全规则分支的样例数据
 ```
 
-### 4.2 模型权重(在 `C:\Users\Administrator\yolo_work\`,不入 git)
+### 4.2 模型权重(已入库 `models/fire_seg_gpu/`,说明见 [models/fire_seg_gpu/README.md](models/fire_seg_gpu/README.md))
 
 | 文件 | 大小 | 用途 |
 |---|---|---|
-| `runs/segment/runs/fire_seg_gpu/weights/best.pt` | 77 MB | YOLO-seg 训练产物,16 类(fire_door/safety_exit/gate/fire_compartment 等) |
-| `dataset/data.yaml` | — | 训练数据集配置 |
-| `runs/segment/runs/fire_seg_gpu_val/` | — | 验证报告(mAP / 混淆矩阵 / PR 曲线) |
+| `models/fire_seg_gpu/best.pt` | 77.7 MB | YOLO11s-seg 训练产物(★推荐),16 类(fire_door/safety_exit/gate/fire_compartment 等) |
+| `models/fire_seg_gpu/last.pt` | 77.7 MB | 末轮权重(断点续训) |
+| `models/fire_seg_gpu/results.csv` · `args.yaml` | — | 训练指标(36 轮)+ 超参 |
+| `models/fire_seg_gpu/val/*.png` | — | 验证报告(Box/Mask 的 P/R/F1/PR 曲线 + 混淆矩阵) |
+
+> 整体 Box mAP50=0.49(被稀有类拖累),逐类 gate≈0.99 / vent≈0.98 / fire_door≈0.92。
+> 客户端"方式② YOLO 权重"或 `mvp_e2e --yolo-weights models/fire_seg_gpu/best.pt` 直接调用。
+> ⚠️ 训练数据集、train/val 图纸拼图属保密图纸,**不入库**(`.gitignore` 已排除 + `models/` 禁 jpg)。
 
 ### 4.3 数据(保密,不入 git;向项目负责人索取)
 
