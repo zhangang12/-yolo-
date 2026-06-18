@@ -53,7 +53,7 @@ python app/main.py
 ### 2.4 没 CVAT 标注?用 YOLO
 
 1. 步骤 3 留空
-2. 步骤 4 选 `C:\Users\Administrator\yolo_work\runs\segment\runs\fire_seg_gpu\weights\best.pt`(已训好的权重 77 MB)
+2. 步骤 4 选 `models/fire_seg_gpu/best.pt`(随仓库交付的已训权重 77 MB)
 3. 其余同上
 
 ---
