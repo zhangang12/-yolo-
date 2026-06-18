@@ -38,6 +38,16 @@ e2e_cache/
 out/
 *.log
 
+# ===== 模型产物(仅干净文件:权重 + 评估图表,绝不含图纸)=====
+# 放在 models/ 下,例外放行权重/曲线/配置;jpg 永远禁止(防训练/验证图纸拼图误入)
+!models/**/*.pt
+!models/**/*.png
+!models/**/*.csv
+!models/**/*.yaml
+!models/**/*.md
+models/**/*.jpg
+models/**/*.jpeg
+
 # 临时/缓存
 _t/
 _shot/

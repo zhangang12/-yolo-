@@ -2,13 +2,13 @@
 
 拖入 PDF 图纸 → 自动识别 → 结构化数据 → 与消防规范比对 → 在原图标注不合规位置。
 
-> 📄 **新成员先读 [`HANDOFF.md`](HANDOFF.md)** —— 项目背景、架构、进度、技术决策、待办全在那里。
+> 📄 **新成员先读 [`DELIVERY.md`](DELIVERY.md)** —— 交付总览、架构、5 项任务完成度、已知限制、路线图全在那里。
 
 ## 目录结构
 
 ```
 fire-review-mvp/
-├── HANDOFF.md              交接文档（先读这个）
+├── DELIVERY.md             交付文档（先读这个）
 ├── README.md              本文件（安装与用法）
 ├── requirements.txt
 ├── app/                    🖥️ 桌面客户端（PySide6）
@@ -124,7 +124,7 @@ python tools/e2e_demo.py  图纸.pdf  输出目录  --page 0 --dpi 200
 - `e2e_annotated.png/.pdf` —— 原图标注版（绿框=合规，红框=超限，黄框=待复核）
 
 > **①②阶段优先走"文字层直读"**：图纸已写明面积时，防火分区判定精确、带规范出处、无噪声；
-> 图纸未写明时回退 OCR 识别（含噪声，仅演示）。其余指标（出口个数/净宽/门方向等）仍需 YOLO+几何（见 HANDOFF 第 3、9 节）。
+> 图纸未写明时回退 OCR 识别（含噪声，仅演示）。其余指标（出口个数/净宽/门方向等）仍需 YOLO+几何（见 DELIVERY.md 第三、五节）。
 
 ## 已实现的规范检查（rule_engine 驱动）
 
@@ -143,6 +143,5 @@ python tools/e2e_demo.py  图纸.pdf  输出目录  --page 0 --dpi 200
 
 Python 3.9+；`pymupdf` / `opencv-python` / `numpy` / `pytesseract` / `Pillow`。训练阶段另需 `ultralytics`。
 
-## 数据
 
-图纸、标注数据均为保密业务数据，**不入库**（见 `.gitignore`）。请向项目负责人索取。
+
