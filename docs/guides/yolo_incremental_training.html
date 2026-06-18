@@ -71,7 +71,7 @@
 <h3>1.1 基线权重</h3>
 <table>
 <tr><th>位置</th><th>说明</th></tr>
-<tr><td><code>runs/segment/runs/fire_seg_gpu/weights/best.pt</code></td><td>2026-06 训练产物(81 MB)</td></tr>
+<tr><td><code>models/fire_seg_gpu/best.pt</code></td><td>2026-06 训练产物(81 MB)</td></tr>
 <tr><td>架构</td><td>yolo11s-seg(small,16 类)</td></tr>
 <tr><td>训练数据</td><td>18 张图(9 站厅 + 9 总平面),切片后 349 个 1024×1024 瓦片</td></tr>
 <tr><td>训练参数</td><td>imgsz=1024, batch=4, epochs=50(实际 37 epoch 停),--no-amp, --workers 0</td></tr>
@@ -198,7 +198,7 @@ python tools/fire_anno_tool.py qc ./data/anno_all/batch_20260715_new_hall.xml --
 <h3>3.3 重建 YOLO 数据集</h3>
 <pre><code>python app/backend/build_dataset.py  \
     ./data/anno_all/  \
-    ./yolo_work/dataset_v2/  \
+    ./dataset/v2/  \
     --tile 1024 --overlap 128 --seed 0</code></pre>
 
 <p>关注产出报告里的"各类实例数":</p>
@@ -214,12 +214,12 @@ python tools/fire_anno_tool.py qc ./data/anno_all/batch_20260715_new_hall.xml --
 
 <h3>4.1 策略 A:从 best.pt 继续训 <span class="badge green">默认</span></h3>
 <pre><code>python app/backend/train_yolo.py  train  \
-    ./yolo_work/dataset_v2/data.yaml  \
-    --model ./yolo_work/runs/segment/runs/fire_seg_gpu/weights/best.pt  \
+    ./dataset/v2/data.yaml  \
+    --model models/fire_seg_gpu/best.pt  \
     --epochs 30 \
     --imgsz 1024 --batch 4 --patience 8  \
     --workers 0 --no-amp --device 0  \
-    --project ./yolo_work/runs --name fire_seg_v2</code></pre>
+    --project ./runs --name fire_seg_v2</code></pre>
 
 <p>关键点:</p>
 <ul>
@@ -230,11 +230,11 @@ python tools/fire_anno_tool.py qc ./data/anno_all/batch_20260715_new_hall.xml --
 
 <h3>4.2 策略 B:从预训练权重全量重训</h3>
 <pre><code>python app/backend/train_yolo.py  train  \
-    ./yolo_work/dataset_v2/data.yaml  \
+    ./dataset/v2/data.yaml  \
     --model yolo11s-seg.pt  \
     --epochs 100 --imgsz 1024 --batch 4 --patience 20  \
     --workers 0 --no-amp --device 0  \
-    --project ./yolo_work/runs --name fire_seg_v2_full</code></pre>
+    --project ./runs --name fire_seg_v2_full</code></pre>
 
 <h3>4.3 参数选择速查</h3>
 <table>
@@ -258,8 +258,8 @@ python tools/fire_anno_tool.py qc ./data/anno_all/batch_20260715_new_hall.xml --
 
 <h3>5.1 跑 val</h3>
 <pre><code>python app/backend/train_yolo.py  val  \
-    ./yolo_work/dataset_v2/data.yaml  \
-    --weights ./yolo_work/runs/segment/runs/fire_seg_v2/weights/best.pt  \
+    ./dataset/v2/data.yaml  \
+    --weights ./runs/fire_seg_v2/weights/best.pt  \
     --imgsz 1024</code></pre>
 
 <h3>5.2 对照基线指标</h3>
@@ -273,10 +273,10 @@ python tools/fire_anno_tool.py qc ./data/anno_all/batch_20260715_new_hall.xml --
 <h3>5.3 视觉对比(强烈推荐)</h3>
 <p>同一张图,两个模型分别推理,人眼对比:</p>
 <pre><code># 用 v1 模型
-python tools/sahi_predict.py  ./old/best.pt  test_img.jpg  --out ./pred_v1/
+python tools/sahi_predict.py  models/fire_seg_gpu/best.pt  test_img.jpg  --out ./pred_v1/
 
 # 用 v2 模型
-python tools/sahi_predict.py  ./new/best.pt  test_img.jpg  --out ./pred_v2/
+python tools/sahi_predict.py  ./runs/fire_seg_v2/weights/best.pt  test_img.jpg  --out ./pred_v2/
 
 # 打开两张 _pred.jpg 并排看</code></pre>
 
@@ -289,17 +289,27 @@ python tools/sahi_predict.py  ./new/best.pt  test_img.jpg  --out ./pred_v2/
 
 <h2 id="deploy">6. 发布:用新权重替换旧的</h2>
 
-<h3>6.1 备份旧权重</h3>
-<pre><code># 备份 v1 为 _v1.pt(永久保留)
-cp ./yolo_work/runs/segment/runs/fire_seg_gpu/weights/best.pt  \
-   ./yolo_work/weights_archive/best_v1_20260615.pt</code></pre>
+<h3>6.1 新模型晋级入库(每版独立目录,不覆盖旧版)</h3>
+<p>约定:每个交付模型在仓库 <code>models/</code> 下占一个目录,<strong>v1 永久保留在 <code>models/fire_seg_gpu/</code></strong>,
+新版另开 <code>models/fire_seg_v2/</code>,这样可随时回滚、可对照。</p>
+<pre><code># 把训练出的新权重 + 评估图表晋级入库(只拷 .pt/.csv/.yaml/.png,绝不拷图纸 jpg)
+mkdir -p models/fire_seg_v2/val
+cp ./runs/fire_seg_v2/weights/best.pt  models/fire_seg_v2/best.pt
+cp ./runs/fire_seg_v2/weights/last.pt  models/fire_seg_v2/last.pt
+cp ./runs/fire_seg_v2/results.csv      models/fire_seg_v2/results.csv
+cp ./runs/fire_seg_v2/args.yaml        models/fire_seg_v2/args.yaml
+cp ./runs/fire_seg_v2_val/*.png        models/fire_seg_v2/val/   # 只有曲线/混淆矩阵是 png</code></pre>
+<div class="warn">
+<strong>绝不要把 <code>train_batch*.jpg</code> / <code>val_batch*.jpg</code> 拷进 <code>models/</code></strong> ——
+它们是图纸拼图,属保密数据。<code>.gitignore</code> 已对 <code>models/**/*.jpg</code> 永久封禁作双保险。
+</div>
 
-<h3>6.2 更新生产权重路径</h3>
-<p>本项目目前生产权重路径硬编码在测试脚本中。在客户端 / SAHI / e2e 里,
-统一指向 <strong>同一个软链或副本</strong> 即可:</p>
-<pre><code># 推荐做法:维护一个稳定路径 best_prod.pt
-cp ./yolo_work/runs/segment/runs/fire_seg_v2/weights/best.pt  \
-   ./yolo_work/best_prod.pt</code></pre>
+<h3>6.2 切换生产权重</h3>
+<p>把客户端"方式② YOLO 权重"和 <code>mvp_e2e --yolo-weights</code> 指向新目录即可:</p>
+<pre><code>python tools/mvp_e2e.py "" 底图.pdf out/ --pdf 底图.pdf \
+    --yolo-weights models/fire_seg_v2/best.pt</code></pre>
+<p>同步更新 <code>DELIVERY.md §4.2</code> 与 <code>models/fire_seg_v2/README.md</code> 的指标与路径。
+回滚只需改回 <code>models/fire_seg_gpu/best.pt</code>。</p>
 
 <h3>6.3 客户端"YOLO 训练 → 评估"页测试</h3>
 <p>把 v2 best.pt 喂给客户端的评估页跑一遍,看混淆矩阵图。
@@ -415,29 +425,29 @@ python tools/fire_anno_tool.py qc ./data/anno_all/batch_$(date +%Y%m%d).xml
 
 # 3. 重建数据集
 python app/backend/build_dataset.py  \
-    ./data/anno_all/  ./yolo_work/dataset_v2/  \
+    ./data/anno_all/  ./dataset/v2/  \
     --tile 1024 --overlap 128 --seed 0
 
 # 4. 策略 A 增量训练
 python app/backend/train_yolo.py train  \
-    ./yolo_work/dataset_v2/data.yaml  \
-    --model ./yolo_work/best_prod.pt  \
+    ./dataset/v2/data.yaml  \
+    --model models/fire_seg_gpu/best.pt  \
     --epochs 30 --imgsz 1024 --batch 4 --patience 8  \
     --workers 0 --no-amp --device 0  \
-    --project ./yolo_work/runs --name fire_seg_$(date +%Y%m%d)
+    --project ./runs --name fire_seg_$(date +%Y%m%d)
 
 # 5. 评估
 python app/backend/train_yolo.py val  \
-    ./yolo_work/dataset_v2/data.yaml  \
-    --weights ./yolo_work/runs/segment/runs/fire_seg_$(date +%Y%m%d)/weights/best.pt
+    ./dataset/v2/data.yaml  \
+    --weights ./runs/fire_seg_$(date +%Y%m%d)/weights/best.pt
 
 # 6. 与基线对比 → 决定是否发布
-# 7. 发布:cp best.pt → ./yolo_work/best_prod.pt</code></pre>
+# 7. 发布:新模型晋级入库到独立目录 models/fire_seg_vN/(见 §6.1,勿覆盖 v1)</code></pre>
 
 <hr>
 
 <p style="text-align: center; color: #95a5a6; font-size: 13px; margin-top: 50px;">
-基于 2026-06 实测流程编写 &nbsp;|&nbsp; 配套权重:fire_seg_gpu/best.pt &nbsp;|&nbsp; 文档版本:2026-06
+基于 2026-06 实测流程编写 &nbsp;|&nbsp; 配套权重:models/fire_seg_gpu/best.pt &nbsp;|&nbsp; 文档版本:2026-06
 </p>
 
 </body>
