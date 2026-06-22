@@ -142,8 +142,7 @@ examples/
 
 | 文件 | 大小 | 用途 |
 |---|---|---|
-| `models/fire_seg_gpu/best.pt` | 77.7 MB | YOLO11s-seg 训练产物(★推荐),16 类(fire_door/safety_exit/gate/fire_compartment 等) |
-| `models/fire_seg_gpu/last.pt` | 77.7 MB | 末轮权重(断点续训) |
+| `models/fire_seg_gpu/best.pt` | 77.7 MB | YOLO11s-seg 训练产物(★推荐,预审/增量训练都用它),16 类(fire_door/safety_exit/gate/fire_compartment 等) |
 | `models/fire_seg_gpu/results.csv` · `args.yaml` | — | 训练指标(36 轮)+ 超参 |
 | `models/fire_seg_gpu/val/*.png` | — | 验证报告(Box/Mask 的 P/R/F1/PR 曲线 + 混淆矩阵) |
 

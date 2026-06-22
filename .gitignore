@@ -47,6 +47,8 @@ out/
 !models/**/*.md
 models/**/*.jpg
 models/**/*.jpeg
+# last.pt 仅断点续训用,不入库(交付只留 best.pt),避免 ~77MB 冗余
+models/**/last.pt
 
 # 临时/缓存
 _t/
