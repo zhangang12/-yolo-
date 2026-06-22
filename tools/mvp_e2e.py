@@ -253,9 +253,11 @@ def run(xml_path, img_path, out_dir, scale=None, station_meta=None, rules_path=N
     print(f"[准备] 产物命名前缀: {stem}  (源: {os.path.basename(img_path)})")
 
     # ★ 数据源决策: CVAT 真值优先,否则用 YOLO 自动识别生成临时 CVAT
+    data_source = "cvat"   # 供报告如实标注数据来源
     if not xml_path:
         if yolo_weights:
             print(f"[准备] 未提供 CVAT 标注,用 YOLO 自动识别: {yolo_weights}")
+            data_source = "yolo"
             import yolo_to_cvat
             tmp_xml = os.path.join(out_dir, f"{stem}_yolo_auto.xml")
             yolo_to_cvat.yolo_to_cvat(yolo_weights, img_path, tmp_xml,
@@ -433,6 +435,7 @@ def run(xml_path, img_path, out_dir, scale=None, station_meta=None, rules_path=N
             design_stage="初审 (AI 预审)",
             reviewer="AI 预审系统 (MVP)",
             source_pdf_name=os.path.basename(img_path),
+            data_source=data_source,
         )
         print(f"  Word 审查意见表: {out_docx}")
     except Exception as e:
