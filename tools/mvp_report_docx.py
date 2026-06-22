@@ -145,12 +145,26 @@ def _shade_cell(cell, hex_color):
 
 def build(findings_path, annotated_img, out_docx,
           station_name="未指定", design_stage="初审",
-          reviewer="AI 预审系统", source_pdf_name=None):
+          reviewer="AI 预审系统", source_pdf_name=None, data_source="cvat"):
+    """data_source: 'cvat'(人工真值标注)或 'yolo'(模型自动识别)——决定数据来源标注与免责口径。"""
     findings = json.load(open(findings_path, encoding="utf-8"))
 
     fails = [f for f in findings if f.get("passed") is False]
     reviews = [f for f in findings if f.get("review_required")]
     passes = [f for f in findings if f.get("passed") is True]
+
+    # 数据来源如实标注(CVAT 真值 vs YOLO 自动识别)——口径不同,可信度不同
+    if str(data_source).lower() == "yolo":
+        source_label = "YOLO 模型自动识别 + 矢量 PDF 几何量测"
+        source_clause = (
+            "涉及空间关系(出口数 / 间距 / 净宽 / 门开启方向等)的对象由 YOLO 模型自动识别,"
+            "再经矢量 PDF 几何量测;模型识别存在误差,稀有类(如安全出口、商铺)可能漏检或误检,"
+            "故涉及数量、位置的结论务必逐条人工核对原图。")
+    else:
+        source_label = "CVAT 标注真值 + 矢量 PDF 几何量测"
+        source_clause = (
+            "涉及空间关系(出口数 / 间距 / 净宽 / 门开启方向等)的判定依据 CVAT 真值标注 + 矢量 PDF 几何量测,"
+            "结论受标注完整度影响。")
 
     doc = Document()
     # 全文默认字体
@@ -189,7 +203,7 @@ def build(findings_path, annotated_img, out_docx,
     _set_cell(info.cell(2, 3), "rules.json (37 条 / 8 大类)")
 
     _set_cell(info.cell(3, 0), "数据来源", bold=True)
-    _set_cell(info.cell(3, 1), "CVAT 标注真值 + 矢量 PDF 几何量测")
+    _set_cell(info.cell(3, 1), source_label)
     _set_cell(info.cell(3, 2), "审查范围", bold=True)
     _set_cell(info.cell(3, 3), "防火分区/疏散/安全出口/防火门/防火间距等")
 
@@ -284,8 +298,8 @@ def build(findings_path, annotated_img, out_docx,
     p.add_run("本报告由 AI 预审系统自动生成。").bold = True
     doc.add_paragraph(
         "面积等数值若来自图纸文字层,为设计院的声称值,未经几何复核;"
-        "涉及空间关系(出口数 / 间距 / 净宽 / 门开启方向等)的判定依据 CVAT 真值标注 + 矢量 PDF 几何量测,"
-        "结论受标注完整度影响。本报告供审查参考,不替代法定审查结论。"
+        + source_clause +
+        "本报告供审查参考,不替代法定审查结论。"
     )
     doc.add_paragraph(
         f"规则引擎采用确定性 if-else 判定,每条违规均附规范出处(GB 50016 / GB 50157 / GB 51298 等)。"
