@@ -20,7 +20,7 @@
 
 - 基座:`yolo11s-seg.pt` · 任务:`segment`(分割,要算防火分区面积必须闭合多边形)
 - `imgsz=1024` · `batch=4` · `device=0`(RTX 5060)· `workers=0` · `amp=false`
-  (`workers=0` + `amp=false` 是 Windows 中文路径 + RTX 50 系 Blackwell 的必需参数,见 docs/guides/yolo_training_guide.md)
+  (`workers=0` + `amp=false` 是 Windows 中文路径 + RTX 50 系 Blackwell 的必需参数,见 docs/guides/YOLO训练指南.md)
 - 设定 50 轮,实际在 **36 轮** 收敛/停止
 
 ## 整体指标(`results.csv` 末轮,16 类聚合)
@@ -33,7 +33,7 @@
 > 聚合 mAP 偏低是被稀有类拖累(训练实例 <20 的类 mAP≈0)。**逐类**差异很大:
 > `gate`≈0.99 / `vent`≈0.98 / `fire_door`≈0.92,而 `safety_exit` / `commercial_shop` 因样本太少≈0。
 > 逐类细节见 `val/confusion_matrix.png` 与各 `*_curve.png`,精度提升路径见
-> [docs/guides/yolo_incremental_training.html](../../docs/guides/yolo_incremental_training.html)。
+> [docs/guides/YOLO增量训练指南.html](../../docs/guides/YOLO增量训练指南.html)。
 
 ## 用法
 

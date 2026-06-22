@@ -118,15 +118,15 @@ rules/                              规则知识库
 
 docs/                               文档(已分类归档)
 ├── guides/                         操作指南(怎么用)
-│   ├── client_guide.html   ★       客户端使用指南
-│   ├── scripts_guide.html  ★       脚本使用指南
-│   ├── yolo_incremental_training.html ★  YOLO 增量训练指南
-│   ├── yolo_training_guide.md      YOLO 训练流程
-│   ├── prelabel_guide.md           预标注原理与流程
-│   └── cvat_template_setup.md      CVAT 模板导入(给标注公司)
+│   ├── 客户端使用指南.html   ★       客户端使用指南
+│   ├── 脚本使用指南.html  ★       脚本使用指南
+│   ├── YOLO增量训练指南.html ★  YOLO 增量训练指南
+│   ├── YOLO训练指南.md      YOLO 训练流程
+│   ├── 预标注指南.md           预标注原理与流程
+│   └── CVAT模板导入指南.md      CVAT 模板导入(给标注公司)
 ├── reference/                      规范/参考(是什么)
-│   ├── label_schema.md             标注标签 schema
-│   ├── rule_engine_notes.md        规则引擎评审与设计
+│   ├── 标注标签说明.md             标注标签 schema
+│   ├── 规则引擎说明.md        规则引擎评审与设计
 │   ├── 标注规范说明_详细版.md/.docx  标注规范 v3(给标注团队)
 │   ├── 消防检查规则.docx           规则知识库来源(保密,不入 git)
 │   └── Mvp任务.pdf                 需求说明(保密,不入 git)
@@ -178,7 +178,7 @@ e2e_out/
 | 1 | 识别站厅层 公共/设备/付费/非付费区(面) | 🟡 **3/4** | `fire_compartment` + `public_area` ✅;**付费区/非付费区从未拆**(schema 缺细分) |
 | 2 | 识别安全出口/楼梯/扶梯/闸机/商铺(点) | ✅ **5/5** | YOLO 训出来,gate mAP=0.99 / fire_door=0.92;safety_exit/commercial_shop 训练实例<20 mAP 偏低 |
 | 3 | 提取防火分区编号 + 面积(面+OCR) | ✅ **3/3** | `vector_extract.py` 矢量层直读 ✅;`raster_ocr.py` 栅格 OCR 兜底已接入 `mvp_e2e [1.6/4]`(矢量层缺失时按几何匹配补 `area_m2_design`) |
-| 4 | 楼梯/走道/门宽(线+OCR) | 🟡 | `geom_measure.door_net_width_m`(洞口宽−0.15)+ width_line 关联实现;⚠️ 写死的 −0.15 扣减会让标准 1000mm 门集体误判 <0.9m(本版未修,门宽 FAIL 需人工复核),正解(读门型号代码)待跟进。见[交付边界与已知限制](docs/reference/交付边界与已知限制.md) §2.2 |
+| 4 | 楼梯/走道/门宽(线+OCR) | 🟡 | `geom_measure.door_net_width_m`(洞口宽−0.15)+ width_line 关联实现;⚠️ 写死的 −0.15 扣减会让标准 1000mm 门集体误判 <0.9m(本版未修,门宽 FAIL 需人工复核),正解(读门型号代码)待跟进。详见[交付边界与已知限制](docs/reference/交付边界与已知限制.md) §3.1 |
 | 5 | 公共区→安全出口疏散路径(点+面+图算法) | ✅ | `evac_path.py` 多源 Dijkstra(8 邻接 + 对角线 √2),公共区栅格化 + 寻路,接入 `mvp_e2e [1.5/4]`,派生 `EVAC-DERIVED-01` 喂规则引擎(嘉宾站实测 43.63m) |
 
 ---
@@ -217,11 +217,11 @@ python tools/fire_anno_tool.py qc 标注.xml
 |---|---|
 | **交付边界 / 已知限制 / 待跟进**(支持什么·不支持什么·依赖什么) | [docs/reference/交付边界与已知限制.md](docs/reference/交付边界与已知限制.md) |
 | **tools/ 模块索引(活跃 / 归档一览)** | [tools/README.md](tools/README.md) |
-| **客户端 4 页用法 + 截图说明** | [docs/guides/client_guide.html](docs/guides/client_guide.html) |
-| **各脚本命令行 + 组合工作流** | [docs/guides/scripts_guide.html](docs/guides/scripts_guide.html) |
-| **YOLO 增量训练 + 基线指标** | [docs/guides/yolo_incremental_training.html](docs/guides/yolo_incremental_training.html) |
-| **CVAT 项目模板导入(给标注公司)** | [docs/guides/cvat_template_setup.md](docs/guides/cvat_template_setup.md) |
+| **客户端 4 页用法 + 截图说明** | [docs/guides/客户端使用指南.html](docs/guides/客户端使用指南.html) |
+| **各脚本命令行 + 组合工作流** | [docs/guides/脚本使用指南.html](docs/guides/脚本使用指南.html) |
+| **YOLO 增量训练 + 基线指标** | [docs/guides/YOLO增量训练指南.html](docs/guides/YOLO增量训练指南.html) |
+| **CVAT 项目模板导入(给标注公司)** | [docs/guides/CVAT模板导入指南.md](docs/guides/CVAT模板导入指南.md) |
 | **标注规范 v3(给标注团队)** | [docs/reference/标注规范说明_详细版.md](docs/reference/标注规范说明_详细版.md) |
-| **规则引擎评审与设计** | [docs/reference/rule_engine_notes.md](docs/reference/rule_engine_notes.md) |
+| **规则引擎评审与设计** | [docs/reference/规则引擎说明.md](docs/reference/规则引擎说明.md) |
 | **规则 schema** | [rules/schema.md](rules/schema.md) |
 | **本文档(交付总览 / 进度 / 待办)** | [DELIVERY.md](DELIVERY.md) |

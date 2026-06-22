@@ -7,13 +7,16 @@
 
 用法：
   python train_yolo.py train  <data.yaml>  [--model yolo11s-seg.pt] [--epochs 100]
-        [--imgsz 1024] [--batch 8] [--patience 20] [--project runs] [--name exp] [--device ""]
+        [--imgsz 1024] [--batch 4] [--patience 20] [--workers 0] [--no-amp]
+        [--project runs] [--name exp] [--device ""]
   python train_yolo.py val    <data.yaml>  --weights runs/exp/weights/best.pt [--imgsz 1024]
 
-要点（与 docs/guides/yolo_training_guide.md 一致）：
+要点（与 docs/guides/YOLO训练指南.md 一致）：
   - 从预训练权重迁移学习，别从零训。
   - 目标小，imgsz 要大(1024)，配合切片。
   - patience 早停；评估看每类 P/R 与 mAP50。
+  - 安全默认(Windows/RTX 50 系)：--batch 4、--workers 0；如需开 AMP 用默认即可，
+    关闭 AMP 加 --no-amp(GUI 训练页默认就是关 AMP)。
 """
 import sys, argparse
 
@@ -86,13 +89,16 @@ def main():
     t.add_argument("--model", default="yolo11s-seg.pt")
     t.add_argument("--epochs", type=int, default=100)
     t.add_argument("--imgsz", type=int, default=1024)
-    t.add_argument("--batch", type=int, default=8)
+    t.add_argument("--batch", type=int, default=4,
+                   help="一次喂给显卡的图数。默认 4(适配 8G 显存 @imgsz1024);"
+                        "报 CUDA out of memory 调小,显存富余可调大提速。")
     t.add_argument("--patience", type=int, default=20)
     t.add_argument("--project", default="runs")
     t.add_argument("--name", default="exp")
     t.add_argument("--device", default="")
-    t.add_argument("--workers", type=int, default=8,
-                   help="DataLoader workers；Windows + 中文路径建议 0")
+    t.add_argument("--workers", type=int, default=0,
+                   help="DataLoader 数据加载子进程数。默认 0(单进程):规避 Windows+中文路径下多进程"
+                        "崩溃([WinError 1455] 页面文件太小 / 共享内存)。Linux/大内存机可调大提速。")
     t.add_argument("--no-amp", dest="amp", action="store_false",
                    help="关闭自动混合精度(AMP)；RTX 50系/Blackwell 等新卡偶发 cudaErrorUnknown 时使用")
     t.set_defaults(amp=True)
