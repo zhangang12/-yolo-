@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>标注标签说明</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+         max-width: 1100px; margin: 24px auto; padding: 0 28px; color: #2c3e50;
+         line-height: 1.7; background: #fafbfc; }
+  h1 { color: #c0392b; border-bottom: 3px solid #c0392b; padding-bottom: 10px; }
+  h2 { color: #2980b9; margin-top: 36px; border-left: 5px solid #2980b9; padding-left: 12px; }
+  h3 { color: #27ae60; margin-top: 28px; }
+  h4 { color: #8e44ad; margin-top: 20px; }
+  code { background: #f4f6f8; padding: 2px 6px; border-radius: 3px;
+         font-family: "Consolas", "Monaco", monospace; color: #e74c3c; font-size: 13.5px; }
+  pre { background: #2c3e50; color: #ecf0f1; padding: 14px 18px; border-radius: 6px;
+        overflow-x: auto; font-size: 13.5px; line-height: 1.55; }
+  pre code { background: transparent; color: #ecf0f1; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; background: white; font-size: 14px; }
+  th, td { border: 1px solid #d5dbdb; padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: #34495e; color: white; font-weight: 600; }
+  tr:nth-child(even) td { background: #fbfcfd; }
+  .tip { background: #eafaf1; border-left: 4px solid #27ae60; padding: 10px 16px; margin: 14px 0; border-radius: 0 4px 4px 0; }
+  .warn { background: #fef5e7; border-left: 4px solid #e67e22; padding: 10px 16px; margin: 14px 0; border-radius: 0 4px 4px 0; }
+  .danger { background: #fdedec; border-left: 4px solid #e74c3c; padding: 10px 16px; margin: 14px 0; border-radius: 0 4px 4px 0; }
+  .toc { background: #ecf0f1; padding: 12px 22px; border-radius: 6px; margin: 18px 0 28px; }
+  .toc ol { margin: 6px 0; padding-left: 22px; }
+  .toc a { color: #2980b9; text-decoration: none; }
+  .badge { display: inline-block; padding: 1px 9px; border-radius: 10px; font-size: 12px; font-weight: 600; color: white; margin-right: 4px; }
+  .badge.green { background: #27ae60; }
+  .badge.blue  { background: #2980b9; }
+  .badge.purple { background: #8e44ad; }
+  .badge.orange { background: #e67e22; }
+  .badge.new { background: #e74c3c; }
+  hr { border: none; border-top: 1px dashed #bdc3c7; margin: 30px 0; }
+  .flow { background: #fff; border: 1px solid #d5dbdb; padding: 14px 20px; border-radius: 6px; margin: 14px 0; }
+  .flow-step { padding: 6px 12px; background: #2980b9; color: white; border-radius: 4px;
+               display: inline-block; margin: 4px; font-size: 13px; }
+  .flow-arrow { color: #7f8c8d; font-size: 18px; padding: 0 4px; }
+</style>
+</head>
+<body>
+<h1 id="标注-schema标签词表">标注 Schema（标签词表）</h1>
+<p>英文 snake_case，<strong>输出标签名必须 100%
+与本表一致</strong>，不得拼错、不得混用中文。质检工具
+<code>fire_anno_tool.py</code> 内置此 schema，可直接校验。</p>
+<h2 id="总平面图site">总平面图（site）</h2>
+<table>
+<thead>
+<tr>
+<th>标签</th>
+<th>几何</th>
+<th>属性</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>station_exit_ground</code></td>
+<td>polygon</td>
+<td>—</td>
+<td>出入口/地面垂直电梯/紧急疏散出口的地面投影</td>
+</tr>
+<tr>
+<td><code>vent_group_ground</code></td>
+<td>polygon</td>
+<td>—</td>
+<td>风亭(新风/排风/活塞)地面实体；高风亭标底座投影</td>
+</tr>
+<tr>
+<td><code>surrounding_building</code></td>
+<td>polygon</td>
+<td>text_content</td>
+<td>周边 50m/100m 建筑外墙投影</td>
+</tr>
+<tr>
+<td><code>fire_clearance_line</code></td>
+<td>polyline</td>
+<td>text_content</td>
+<td>防火间距尺寸线</td>
+</tr>
+<tr>
+<td><code>building_meta</code></td>
+<td>box</td>
+<td>text_content</td>
+<td>周边建筑属性文字（"二类高层住宅""耐火等级一级""8F"）</td>
+</tr>
+<tr>
+<td><code>vent_meta</code></td>
+<td>box</td>
+<td>text_content</td>
+<td>风亭属性文字（"敞口""侧出""排风亭"）</td>
+</tr>
+<tr>
+<td><code>dimension_val</code></td>
+<td>box</td>
+<td>text_content</td>
+<td>防火间距尺寸数字（如 15.02m）</td>
+</tr>
+</tbody>
+</table>
+<h2 id="站厅层hall">站厅层（hall）</h2>
+<table>
+<thead>
+<tr>
+<th>标签</th>
+<th>几何</th>
+<th>属性</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>fire_compartment</code></td>
+<td>polygon</td>
+<td><strong>zone_type</strong></td>
+<td>沿防火墙/特级防火卷帘画闭合多边形</td>
+</tr>
+<tr>
+<td><code>commercial_shop</code></td>
+<td>polygon</td>
+<td>—</td>
+<td>非付费区商铺边界（注意规范≤3个，勿误标）</td>
+</tr>
+<tr>
+<td><code>fire_door</code></td>
+<td>box</td>
+<td><strong>class, swing_dir</strong></td>
+<td>防火门实体符号</td>
+</tr>
+<tr>
+<td><code>stair_escalator</code></td>
+<td>box</td>
+<td>—</td>
+<td>扶梯/疏散楼梯实体符号</td>
+</tr>
+<tr>
+<td><code>draft_curtain</code></td>
+<td>box</td>
+<td>—</td>
+<td>挡烟垂壁示意符号</td>
+</tr>
+<tr>
+<td><code>evac_distance_line</code></td>
+<td>polyline</td>
+<td>text_content</td>
+<td>公共区最远疏散距离线（如 48.6m）</td>
+</tr>
+<tr>
+<td><code>width_dimension_line</code></td>
+<td>polyline</td>
+<td>width*</td>
+<td>通道/楼梯/门净宽尺寸线（*宽度值建议走几何，见下）</td>
+</tr>
+<tr>
+<td><code>room_title</code></td>
+<td>box</td>
+<td>text_content</td>
+<td>房间名称（环控机房、水泵房、厕所…）</td>
+</tr>
+<tr>
+<td><code>val_text</code></td>
+<td>box</td>
+<td>text_content</td>
+<td>数值/字符（1800、1.4m、869.2㎡…）</td>
+</tr>
+</tbody>
+</table>
+<h2 id="属性枚举取值必须在集合内">属性枚举（取值必须在集合内）</h2>
+<table>
+<thead>
+<tr>
+<th>属性</th>
+<th>允许取值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>zone_type</code></td>
+<td>公共区 / 无人区 / 有人值守区</td>
+</tr>
+<tr>
+<td><code>class</code></td>
+<td>甲级 / 乙级</td>
+</tr>
+<tr>
+<td><code>swing_dir</code></td>
+<td>顺着疏散方向 / 逆着疏散方向</td>
+</tr>
+</tbody>
+</table>
+<h2 id="关键约定">关键约定</h2>
+<ol type="1">
+<li><strong>宽度值优先走几何</strong>：<code>width_dimension_line</code>
+的宽度由"线长 × 比例尺"算，不必逐个手填属性；图上数字另由
+<code>val_text</code>+OCR 提供，两者交叉校验。<strong>门净宽 = 洞口宽 −
+150mm</strong>。</li>
+<li><strong>多边形闭合</strong>：<code>fire_compartment</code>
+拐角必须贴墙内中线、不留缝；用防火卷帘分隔处，边界点须与卷帘线重合。</li>
+<li><strong>房间名标全</strong>：尤其水泵房/厕所——规范规定其面积"不计入防火分区面积"，需据此扣除。</li>
+<li><strong>设备区分区别漏</strong>：机房/泵房/配电室等设备区房间，必须有对应的
+<code>fire_compartment</code>(zone_type=无人区/有人值守区)。</li>
+</ol>
+<h2 id="yolo-class-id-映射训练时">YOLO class id 映射（训练时）</h2>
+<pre class="yaml"><code># data.yaml 示例
+names:
+  0: safety_exit          # 注：站厅层&quot;安全出口&quot;若作独立对象需新增
+  1: stair_escalator
+  2: gate                 # 闸机（当前数据缺失，需补）
+  3: commercial_shop
+  4: fire_door
+  5: val_text
+  6: room_title
+  # 分割类
+  7: fire_compartment
+  8: public_area / equip_area ...   # 若区分区域类型</code></pre>
+<blockquote>
+<p>检测类用矩形框，分割类用多边形；可用同一个 YOLO-seg
+模型同时输出。</p>
+</blockquote>
+
+</body>
+</html>

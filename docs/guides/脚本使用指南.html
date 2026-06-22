@@ -181,7 +181,7 @@ python tools/fire_anno_tool.py qc  标注.xml  --type hall   # 或 site / auto</
 <pre><code># 从 SCHEMA(LABELS+ENUMS)自动生成 CVAT 可导入的 labels.json
 python tools/fire_anno_tool.py export-cvat-labels  rules/cvat_labels.json</code></pre>
 <p>标注公司在 CVAT 项目设置 → Labels → 切到 Raw → 粘贴此文件 → Save。
-之后前端只能从下拉菜单选,根除错名标签。具体见 <code>docs/guides/cvat_template_setup.md</code>。</p>
+之后前端只能从下拉菜单选,根除错名标签。具体见 <code>docs/guides/CVAT模板导入指南.md</code>。</p>
 
 <h3>2.2 prelabel_pro.py <span class="badge purple">增强版</span></h3>
 <pre><code># 语义细分 + 内容(OCR) + 置信度分级 + 确认清单 + 自检
