@@ -54,6 +54,7 @@
 <div class="toc">
 <strong>目录</strong>
 <ol>
+  <li><a href="#gui">客户端(GUI)做法 —— 推荐先看 <span class="badge new">2026-06</span></a></li>
   <li><a href="#baseline">当前基线模型(从这里开始)</a></li>
   <li><a href="#strategy">增量训练策略:从已有权重继续 vs 全量重训</a></li>
   <li><a href="#data">增量数据准备(标注 → 数据集)</a></li>
@@ -65,6 +66,36 @@
   <li><a href="#troubleshoot">常见问题</a></li>
 </ol>
 </div>
+
+<h2 id="gui">0. 客户端(GUI)做法 —— 推荐先看</h2>
+
+<p>增量训练在原理上很简单:<strong>把"起点权重"选成你已经训好的 <code>best.pt</code>,用"旧数据+新数据"一起训</strong>。
+客户端「YOLO 训练」页已内置这条路径,新手照下面三步即可,不必碰命令行。</p>
+
+<div class="warn">
+<strong>最关键一点:不能只用新数据训。</strong> 必须把新站标注<strong>并进</strong>旧站标注,一起重建数据集——
+只喂新数据会让模型"灾难性遗忘",把原来认得的类忘掉。
+</div>
+
+<ol>
+  <li><strong>① 建数据集</strong>:把新站的标注(.xml + 底图)和旧站标注<strong>放进同一个标注目录</strong>,
+      在「① 建数据集」页选这个目录 → 开始,生成新的 <code>data.yaml</code>(会自动填到训练页)。</li>
+  <li><strong>② 训练</strong>:在「② 训练」页——
+    <ul>
+      <li>把<strong>「起点权重」</strong>从 <code>yolo11s-seg.pt</code> 改成你的 <code>models/fire_seg_gpu/best.pt</code>
+          (下拉里有预设,或点<strong>「浏览…」</strong>选任意 <code>.pt</code>)。<em>这一步就是"增量"。</em></li>
+      <li><strong>epochs</strong> 填 <strong>30</strong> 左右(增量不用 100)。</li>
+      <li>batch=4 / AMP 关 / 单进程 已是安全默认,RTX 50 系直接开训不会崩。</li>
+      <li>点「开始训练」。</li>
+    </ul>
+  </li>
+  <li><strong>③ 评估</strong>:在「③ 评估」页选新 <code>data.yaml</code> + 新练出的 <code>best.pt</code>,
+      看每类 mAP 比基线(见下面 §2.2)有没有涨;满意就发布(见 §6,新版另存独立目录,别覆盖旧的)。</li>
+</ol>
+
+<p>想了解原理细节、命令行做法、扩类别、主动学习循环,继续往下看。</p>
+
+<hr>
 
 <h2 id="baseline">1. 当前基线模型(从这里开始)</h2>
 
@@ -201,11 +232,22 @@ python tools/fire_anno_tool.py qc ./data/anno_all/batch_20260715_new_hall.xml --
     ./dataset/v2/  \
     --tile 1024 --overlap 128 --seed 0</code></pre>
 
-<p>关注产出报告里的"各类实例数":</p>
+<p>它会把合并目录里<strong>全部</strong> CVAT 标注(旧+新)重新转成 YOLO-seg 数据集:box/polygon 转多边形、
+超长图按 1024 切片(重叠 128)、尺寸线/疏散线等 polyline 自动跳过、按 8:1:1 划分。
+建数据集的完整原理见 <a href="YOLO训练指南.md">YOLO训练指南</a> §3,这里只讲增量要特别盯的两点。</p>
+
+<div class="warn">
+<strong>① 类别顺序绝不能动。</strong> 训练类写在 <code>build_dataset.py</code> 的 <code>CLASS_NAMES</code>(当前 16 类),
+下标即类别 id。增量只是加数据、<strong>不加新类</strong>时,这个列表必须原样不动——
+一旦重排/插入,类别 id 全错位,旧 <code>best.pt</code> 直接报废。确需加新类见 §7(只能往末尾追加)。
+</div>
+
+<p><strong>② 对照"各类实例数"确认新数据真的进来了。</strong> 建完会打印每类实例数,
+拿它和上一版基线(§1.2)逐类比:</p>
 <ul>
-  <li><strong>每类 ≥ 150</strong>(基线):mAP 应该可用</li>
-  <li>30-149:可训但效果一般</li>
-  <li>< 30:大概率 mAP 接近 0,等于没训</li>
+  <li><strong>新站涉及的类,实例数应明显上升</strong>;若某类数字没变 → 新标注没被识别(标签拼错/底图没配对/被质检跳过),回 §3.2 查。</li>
+  <li>每类 <strong>≥150</strong> 较稳;30–149 可训但一般;<strong>&lt;30 基本练不出来</strong>(尤其之前 mAP=0 的稀有类,这次要确认补够了)。</li>
+  <li>出现 <code>❌为0</code> = 这类整批没标注;<code>⚠️不足</code> = 低于 150。</li>
 </ul>
 
 <hr>
@@ -261,6 +303,16 @@ python tools/fire_anno_tool.py qc ./data/anno_all/batch_20260715_new_hall.xml --
     ./dataset/v2/data.yaml  \
     --weights ./runs/fire_seg_v2/weights/best.pt  \
     --imgsz 1024</code></pre>
+<p>客户端「③ 评估」页等价:选 <code>data.yaml</code> + 新练出的 <code>best.pt</code>,混淆矩阵自动显示在右上。</p>
+
+<h3>5.1b 指标速记(对比前先看懂)</h3>
+<ul>
+  <li><strong>mAP50</strong>:重叠度阈值 0.5 下的平均精度,0–1,<strong>整体准确度主指标</strong>,越高越好。</li>
+  <li><strong>mAP50-95</strong>:更严格(要求框/轮廓更贴合),一般比 mAP50 低。</li>
+  <li><strong>P 查准率</strong>=判为某类里真正是的比例(高=误报少);<strong>R 查全率</strong>=实际某类里被找出的比例(高=漏检少)。</li>
+  <li><strong>Box</strong> 看检测框、<strong>Mask</strong> 看分割轮廓(算面积的类重点看 Mask)。</li>
+  <li>术语详解、混淆矩阵读法见 <a href="YOLO训练指南.md">YOLO训练指南</a> §5.2–5.4。</li>
+</ul>
 
 <h3>5.2 对照基线指标</h3>
 <p>把 v2 各类 mAP 和上面 §1.2 的基线表逐项对比:</p>

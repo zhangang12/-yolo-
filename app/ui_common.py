@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """客户端公共件：主题样式、文件选择行、可缩放图片查看器、日志台、子进程执行器。"""
-import os, sys
+import os, sys, re
 from PySide6.QtCore import Qt, QObject, Signal, QProcess, QProcessEnvironment
 from PySide6.QtGui import QPixmap, QPainter, QFont, QColor, QIcon, QTextCursor, QPixmap as _Px
 from PySide6.QtWidgets import (
@@ -204,14 +204,37 @@ class ImageViewer(QGraphicsView):
 
 # ====================== 日志台 ======================
 class LogConsole(QPlainTextEdit):
+    # 终端 ANSI 转义码(颜色 \x1b[34m、清行 \x1b[K、光标移动等),GUI 里要剥掉
+    _ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
+
     def __init__(self):
         super().__init__()
         self.setObjectName("Log"); self.setReadOnly(True)
         self.setMaximumBlockCount(5000)
 
     def append_text(self, s):
-        self.moveCursor(QTextCursor.MoveOperation.End)
-        self.insertPlainText(s)
+        # 1) 去掉 ANSI 控制码(否则显示成 口[K / [34m[1m 等乱码)
+        s = self._ANSI.sub("", s)
+        if not s:
+            return
+        s = s.replace("\r\n", "\n")
+        cur = self.textCursor()
+        # 2) 处理回车 \r:进度条用 \r 回到行首原地刷新 —— 让新内容覆盖当前行,
+        #    而不是堆成几百行。按 \r / \n 切段逐段处理。
+        for part in re.split(r"(\r|\n)", s):
+            if part == "\n":
+                cur.movePosition(QTextCursor.MoveOperation.End)
+                cur.insertText("\n")
+            elif part == "\r":
+                # 选中当前逻辑行(整块,含自动换行部分)并清空,后续文本覆盖它
+                cur.movePosition(QTextCursor.MoveOperation.End)
+                cur.movePosition(QTextCursor.MoveOperation.StartOfBlock,
+                                 QTextCursor.MoveMode.KeepAnchor)
+                cur.removeSelectedText()
+            elif part:
+                cur.movePosition(QTextCursor.MoveOperation.End)
+                cur.insertText(part)
+        self.setTextCursor(cur)
         self.moveCursor(QTextCursor.MoveOperation.End)
         sb = self.verticalScrollBar(); sb.setValue(sb.maximum())
 

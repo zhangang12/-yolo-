@@ -6,7 +6,7 @@
 把【CVAT 标注 XML + 对应底图】转成 YOLO-seg 训练数据集：
   CVAT(box/polygon)  ->  归一化多边形标签  ->  切片(可选)  ->  划分 train/val/test  ->  data.yaml
 
-设计要点（与 docs/guides/yolo_training_guide.md 一致）：
+设计要点（与 docs/guides/YOLO训练指南.md 一致）：
   - 默认 task=seg：box 也转成 4 点多边形，一个 YOLO-seg 模型同时出框和分割。
   - polyline 类(尺寸线/疏散线)无面积，**不作为训练目标**，自动跳过。
   - 站厅图是超长条，必须切片(默认 1024)；切片时标注随之裁剪到瓦片局部坐标。

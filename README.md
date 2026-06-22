@@ -29,8 +29,8 @@ fire-review-mvp/
 │   ├── fire_anno_tool.py     标注三件套：转换 / 质检 / 预标注
 │   └── legacy/               已归档的早期脚本(e2e_steps / fangju_demo …)
 └── docs/                   文档(已分类归档)
-    ├── guides/                操作指南(client/scripts/prelabel/yolo 训练)
-    ├── reference/             规范参考(label_schema / rule_engine_notes / 标注规范)
+    ├── guides/                操作指南(客户端/脚本/预标注/YOLO 训练)
+    ├── reference/             规范参考(标注标签说明 / 规则引擎说明 / 标注规范)
     └── archive/               历史过程文档(任务分工 / annotation_issues_整改单)
 ```
 
@@ -89,7 +89,7 @@ python app/backend/prelabel_pro.py  矢量图纸.pdf  输出目录  --type hall 
 python tools/fire_anno_tool.py all  标注.xml
 ```
 
-> 预标注详细原理、参数、OCR 安装、人工确认流程见 **[docs/guides/prelabel_guide.md](docs/guides/prelabel_guide.md)**。
+> 预标注详细原理、参数、OCR 安装、人工确认流程见 **[docs/guides/预标注指南.md](docs/guides/预标注指南.md)**。
 
 质检能自动报出的典型问题：非法/中文标签、`.`等垃圾属性键、必填空值、枚举越界、必现类缺失（如周边建筑=0）、商铺超规范上限、设备区分区漏标等。
 
@@ -137,7 +137,7 @@ python tools/e2e_demo.py  图纸.pdf  输出目录  --page 0 --dpi 200
 | 出入口/风亭→周边高层民用建筑防火间距 | ≥ 9m | GB 50016-2014 表5.2.2 |
 | 出入口→加油加气加氢站安全间距 | ≥ 50m | GB 50156-2021 4.0.4 |
 
-三项检查（防火分区面积 / 疏散距离 / 防火间距）均由 `tools/rule_engine.py` + `rules/rules.json` 统一驱动。完整规则与冲突处理见 `docs/reference/rule_engine_notes.md`。
+三项检查（防火分区面积 / 疏散距离 / 防火间距）均由 `tools/rule_engine.py` + `rules/rules.json` 统一驱动。完整规则与冲突处理见 `docs/reference/规则引擎说明.md`。
 
 ## 依赖与环境
 
