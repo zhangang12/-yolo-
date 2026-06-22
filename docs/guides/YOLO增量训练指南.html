@@ -346,8 +346,7 @@ python tools/sahi_predict.py  ./runs/fire_seg_v2/weights/best.pt  test_img.jpg  
 新版另开 <code>models/fire_seg_v2/</code>,这样可随时回滚、可对照。</p>
 <pre><code># 把训练出的新权重 + 评估图表晋级入库(只拷 .pt/.csv/.yaml/.png,绝不拷图纸 jpg)
 mkdir -p models/fire_seg_v2/val
-cp ./runs/fire_seg_v2/weights/best.pt  models/fire_seg_v2/best.pt
-cp ./runs/fire_seg_v2/weights/last.pt  models/fire_seg_v2/last.pt
+cp ./runs/fire_seg_v2/weights/best.pt  models/fire_seg_v2/best.pt   # 只入 best.pt;last.pt 仅断点续训用,不入库
 cp ./runs/fire_seg_v2/results.csv      models/fire_seg_v2/results.csv
 cp ./runs/fire_seg_v2/args.yaml        models/fire_seg_v2/args.yaml
 cp ./runs/fire_seg_v2_val/*.png        models/fire_seg_v2/val/   # 只有曲线/混淆矩阵是 png</code></pre>

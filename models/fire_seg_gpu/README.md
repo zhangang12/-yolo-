@@ -7,8 +7,7 @@
 
 | 文件 | 说明 |
 |---|---|
-| `best.pt` (77.7 MB) | **推荐权重**,val mAP 最优轮 |
-| `last.pt` (77.7 MB) | 末轮权重(断点续训用) |
+| `best.pt` (77.7 MB) | **推荐权重**,val mAP 最优轮(预审与增量训练都用它) |
 | `results.csv` | 逐轮训练指标(loss / P / R / mAP) |
 | `args.yaml` | 训练超参(基座 / imgsz / batch / device …) |
 | `val/*.png` | 验证评估图表:P/R/F1/PR 曲线(Box & Mask)+ 混淆矩阵 |
