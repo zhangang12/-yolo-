@@ -2,10 +2,6 @@
 
 > 拖入 PDF 图纸 → 自动识别 → 结构化数据 → 与消防规范比对 → 在原图标注不合规位置 → 输出可交付的 Word 审查意见表。
 
-**MVP 状态**:✅ 端到端全流程跑通(CVAT 真值路径 + YOLO 自动识别路径双通路) · ✅ 客户端 4 页可用 · ✅ 规则引擎 37 条 8 大类 · ✅ 5 个产物自动生成。
-
-**交付时间**:2026-06 · **接手人先读本文档**(30 分钟上手),细节再翻 [docs/](docs/) 下分类文档。
-
 ---
 
 ## 一、30 秒了解项目
@@ -58,7 +54,7 @@ python app/main.py
 
 ---
 
-## 三、系统架构(四个大脑)
+## 三、系统架构(四个模块)
 
 ```
 拖入 PDF → ①识别 ────────→ ②结构化 → ③规范比对 → ④原图标注
@@ -153,9 +149,8 @@ examples/
 
 > 整体 Box mAP50=0.49(被稀有类拖累),逐类 gate≈0.99 / vent≈0.98 / fire_door≈0.92。
 > 客户端"方式② YOLO 权重"或 `mvp_e2e --yolo-weights models/fire_seg_gpu/best.pt` 直接调用。
-> ⚠️ 训练数据集、train/val 图纸拼图属保密图纸,**不入库**(`.gitignore` 已排除 + `models/` 禁 jpg)。
 
-### 4.3 数据(保密,不入 git;向项目负责人索取)
+### 4.3 数据
 
 - `data/02 欧洲城站/` — 9 个站的矢量 PDF(嘉宾、欧洲城、明海、贝尔路、黄君山、石龙、上油松、侨社、珠光)
 - `data/anno_hall/站厅层平面图标注6.10/` — 站厅层 9 张图 CVAT 标注 + 底图
@@ -183,46 +178,12 @@ e2e_out/
 | 1 | 识别站厅层 公共/设备/付费/非付费区(面) | 🟡 **3/4** | `fire_compartment` + `public_area` ✅;**付费区/非付费区从未拆**(schema 缺细分) |
 | 2 | 识别安全出口/楼梯/扶梯/闸机/商铺(点) | ✅ **5/5** | YOLO 训出来,gate mAP=0.99 / fire_door=0.92;safety_exit/commercial_shop 训练实例<20 mAP 偏低 |
 | 3 | 提取防火分区编号 + 面积(面+OCR) | ✅ **3/3** | `vector_extract.py` 矢量层直读 ✅;`raster_ocr.py` 栅格 OCR 兜底已接入 `mvp_e2e [1.6/4]`(矢量层缺失时按几何匹配补 `area_m2_design`) |
-| 4 | 楼梯/走道/门宽(线+OCR) | ✅ | `geom_measure.door_net_width_m`(洞口宽−0.15)+ width_line 关联实现 |
+| 4 | 楼梯/走道/门宽(线+OCR) | 🟡 | `geom_measure.door_net_width_m`(洞口宽−0.15)+ width_line 关联实现;⚠️ 写死的 −0.15 扣减会让标准 1000mm 门集体误判 <0.9m(本版未修,门宽 FAIL 需人工复核),正解(读门型号代码)待跟进。见[交付边界与已知限制](docs/reference/交付边界与已知限制.md) §2.2 |
 | 5 | 公共区→安全出口疏散路径(点+面+图算法) | ✅ | `evac_path.py` 多源 Dijkstra(8 邻接 + 对角线 √2),公共区栅格化 + 寻路,接入 `mvp_e2e [1.5/4]`,派生 `EVAC-DERIVED-01` 喂规则引擎(嘉宾站实测 43.63m) |
 
 ---
 
-## 六、已知限制(交付时必须告知)
-
-### 6.1 模型精度
-
-- YOLO 训练数据仅 18 张图(9 站 × 站厅+总平面),稀有类(`safety_exit` 训练实例 = 4)mAP = 0
-- 客户对照表:`gate` 99% / `vent` 98% / `fire_door` 92% / `surrounding_building` 60% / `safety_exit` 0%
-- **解决路径**:按 [docs/guides/yolo_incremental_training.html](docs/guides/yolo_incremental_training.html) 增量补 8-10 个新站
-
-### 6.2 流程缺口
-
-- **疏散路径为栅格近似** — `evac_path.py` 在 downsample=20(1 cell≈20px)的栅格上跑 Dijkstra,误差约 ±1 个 cell;依赖 ① 有 `public_area`(或 zone=公共区的 `fire_compartment`)多边形 ② 有比例尺 ③ 有 `safety_exit` 出口点,三者缺一则跳过(如 003站厅层数据不足跳过)。算的是"最远点→最近出口"直线可达栅格距离,**未扣除墙体/柱子等障碍**(public_area 内部默认全可通行)
-- **付费区/非付费区未拆** — 任务原文第 1 项 4 类只识别了 3 类
-- **栅格 PDF 兜底** — 明海/贝尔路等无矢量文字层的 PDF,scale 自动标定失败,需用户手填 `--scale`
-
-### 6.3 客户端 UX
-
-- **每次跑同 PDF 会覆盖 `e2e_out/` 旧产物**(同一 stem)— 想保留对比要手动改 "结果存到" 路径
-- **方式② YOLO 路径首次运行下载预训练权重**(GitHub,可能慢)
-- 文件名带全角斜杠(╱)的图,在文件资源管理器和邮件附件里可能有兼容性问题(已用 naming.py 化解)
-
----
-
-## 七、接手人路线图(下个迭代建议优先级)
-
-| 优先级 | 工作 | 工作量 | 价值 |
-|---|---|---|---|
-| 🔴 高 | 标注规范扩 付费/非付费区 + 标注公司补标 | 1 周(含人工) | 补齐 MVP 任务第 1 项 4 类 |
-| 🟡 中 | YOLO 增量训练补稀有类 — 8-10 个新站 | 1 周(标注 + 训练) | safety_exit / commercial_shop 从 mAP 0 → 0.5+ |
-| 🟡 中 | 客户端 "e2e_out/" 子目录化避免覆盖 | 2 小时 | UX 改善 |
-| 🟢 低 | 疏散路径扣障碍(墙/柱挖洞)+ 降低 downsample 提精度 | 1-2 天 | 当前为公共区全可通行的栅格近似,精度可再提 |
-| 🟢 低 | 客户端"端到端预审"加 "选 best.pt" 默认推荐路径提示 | 30 分钟 | 引导用户 |
-
----
-
-## 八、关键命令速查(一行级)
+## 六、关键命令速查(一行级)
 
 ```bash
 # 启动客户端
@@ -250,10 +211,11 @@ python tools/fire_anno_tool.py qc 标注.xml
 
 ---
 
-## 九、深入文档索引
+## 七、深入文档索引
 
 | 内容 | 文档 |
 |---|---|
+| **交付边界 / 已知限制 / 待跟进**(支持什么·不支持什么·依赖什么) | [docs/reference/交付边界与已知限制.md](docs/reference/交付边界与已知限制.md) |
 | **tools/ 模块索引(活跃 / 归档一览)** | [tools/README.md](tools/README.md) |
 | **客户端 4 页用法 + 截图说明** | [docs/guides/client_guide.html](docs/guides/client_guide.html) |
 | **各脚本命令行 + 组合工作流** | [docs/guides/scripts_guide.html](docs/guides/scripts_guide.html) |
