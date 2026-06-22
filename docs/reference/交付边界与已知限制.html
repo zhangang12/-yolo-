@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>交付边界与已知限制</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+         max-width: 1100px; margin: 24px auto; padding: 0 28px; color: #2c3e50;
+         line-height: 1.7; background: #fafbfc; }
+  h1 { color: #c0392b; border-bottom: 3px solid #c0392b; padding-bottom: 10px; }
+  h2 { color: #2980b9; margin-top: 36px; border-left: 5px solid #2980b9; padding-left: 12px; }
+  h3 { color: #27ae60; margin-top: 28px; }
+  h4 { color: #8e44ad; margin-top: 20px; }
+  code { background: #f4f6f8; padding: 2px 6px; border-radius: 3px;
+         font-family: "Consolas", "Monaco", monospace; color: #e74c3c; font-size: 13.5px; }
+  pre { background: #2c3e50; color: #ecf0f1; padding: 14px 18px; border-radius: 6px;
+        overflow-x: auto; font-size: 13.5px; line-height: 1.55; }
+  pre code { background: transparent; color: #ecf0f1; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; background: white; font-size: 14px; }
+  th, td { border: 1px solid #d5dbdb; padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: #34495e; color: white; font-weight: 600; }
+  tr:nth-child(even) td { background: #fbfcfd; }
+  .tip { background: #eafaf1; border-left: 4px solid #27ae60; padding: 10px 16px; margin: 14px 0; border-radius: 0 4px 4px 0; }
+  .warn { background: #fef5e7; border-left: 4px solid #e67e22; padding: 10px 16px; margin: 14px 0; border-radius: 0 4px 4px 0; }
+  .danger { background: #fdedec; border-left: 4px solid #e74c3c; padding: 10px 16px; margin: 14px 0; border-radius: 0 4px 4px 0; }
+  .toc { background: #ecf0f1; padding: 12px 22px; border-radius: 6px; margin: 18px 0 28px; }
+  .toc ol { margin: 6px 0; padding-left: 22px; }
+  .toc a { color: #2980b9; text-decoration: none; }
+  .badge { display: inline-block; padding: 1px 9px; border-radius: 10px; font-size: 12px; font-weight: 600; color: white; margin-right: 4px; }
+  .badge.green { background: #27ae60; }
+  .badge.blue  { background: #2980b9; }
+  .badge.purple { background: #8e44ad; }
+  .badge.orange { background: #e67e22; }
+  .badge.new { background: #e74c3c; }
+  hr { border: none; border-top: 1px dashed #bdc3c7; margin: 30px 0; }
+  .flow { background: #fff; border: 1px solid #d5dbdb; padding: 14px 20px; border-radius: 6px; margin: 14px 0; }
+  .flow-step { padding: 6px 12px; background: #2980b9; color: white; border-radius: 4px;
+               display: inline-block; margin: 4px; font-size: 13px; }
+  .flow-arrow { color: #7f8c8d; font-size: 18px; padding: 0 4px; }
+</style>
+</head>
+<body>
+<h1 id="交付边界与已知限制">交付边界与已知限制</h1>
+<p>本文件界定本系统<strong>当前版本</strong>的能力范围、已知限制、外部依赖与适用前提,供使用方与接手方对齐预期。</p>
+<blockquote>
+<p><strong>定位</strong>:本系统是"AI 预审 +
+人工复核"工具,输出为<strong>预审意见</strong>,所有结论须经人工确认,不作为终审放行依据。</p>
+</blockquote>
+<p>为便于非技术读者理解,文中首次出现的专业术语均附简要说明。</p>
+<hr />
+<h2 id="一系统概述">一、系统概述</h2>
+<p>系统接收一张消防设计图(PDF),依次完成四步:</p>
+<ol type="1">
+<li><strong>识别</strong>:定位图上的防火分区、安全出口、门、楼梯、闸机、商铺等对象。</li>
+<li><strong>量测</strong>:计算防火分区面积、门与走道净宽、公共区至最近安全出口的疏散距离。</li>
+<li><strong>比对</strong>:依据内置《消防规范》知识库的量化条款逐项判定是否合规。</li>
+<li><strong>输出</strong>:在原图标注不合规位置,并生成可交付的 Word
+审查意见表。</li>
+</ol>
+<p>涉及的关键概念:</p>
+<ul>
+<li><strong>矢量 PDF</strong>:由 CAD 等制图软件直接导出的
+PDF,其线条与文字为可解析的矢量数据(可选中文字、缩放不失真),区别于扫描件/图片型
+PDF。本系统的自动识别与比例尺标定<strong>依赖矢量 PDF</strong>。</li>
+<li><strong>比例尺标定</strong>:确定"图上 1
+像素对应现实多少米"的过程。系统自动读取图纸文字层中的比例标注(如
+<code>1:200</code>)换算。</li>
+<li><strong>CVAT
+标注</strong>:由人工在标注工具中框选对象、赋标签产出的"真值数据"(标准答案)。</li>
+<li><strong>YOLO
+模型</strong>:目标识别神经网络模型,经训练后可自动识别图上对象,用于替代人工标注。</li>
+</ul>
+<hr />
+<h2 id="二支持范围">二、支持范围</h2>
+<h3 id="21-输入">2.1 输入</h3>
+<p>单张矢量 PDF 图纸(站厅层平面图或总平面图)。</p>
+<h3 id="22-识别两种通路二选一">2.2 识别(两种通路,二选一)</h3>
+<ul>
+<li><strong>方式①——CVAT 真值标注</strong>:识别准确率
+100%,适用于正式交付与演示,前提是已完成人工标注。</li>
+<li><strong>方式②——YOLO
+模型自动识别</strong>:无需人工、速度快,准确率取决于模型(见
+§3.2);权重随仓库交付。</li>
+</ul>
+<p>可识别对象共 <strong>16
+类</strong>:防火分区、公共区、安全出口、楼梯/扶梯、闸机、防火门、商铺、挡烟垂壁、防火卷帘、地面风亭、周边建筑等。</p>
+<h3 id="23-量测与结构化">2.3 量测与结构化</h3>
+<ul>
+<li>比例尺自动标定(从矢量文字层读取 <code>1:N</code>)。</li>
+<li>几何量测:防火分区面积、门/走道/楼梯净宽、疏散距离。</li>
+<li>面积兜底:矢量层缺面积数据时,以
+OCR(光学字符识别,从图像中读取文字数字)补充。</li>
+</ul>
+<h3 id="24-规则比对">2.4 规则比对</h3>
+<p>内置 <strong>37 条规则,覆盖 8
+类</strong>:防火分区面积、疏散宽度、安全出口、防火门窗卷帘、商铺、安全疏散、防火间距、防排烟。规则为确定性条件判断(非
+AI
+推断),<strong>每条结论均可追溯至具体规范条文与数值</strong>,结果可解释、可复核。</p>
+<h3 id="25-疏散路径">2.5 疏散路径</h3>
+<p>自动计算公共区内最不利点至最近安全出口的疏散距离,与规范限值(一般 50
+m)比较。</p>
+<h3 id="26-输出物5-项">2.6 输出物(5 项)</h3>
+<p>标注图(标记不合规位置)、规则评估结果(JSON)、结构化数据(JSON)、Markdown
+简报、<strong>Word 审查意见表(可交付)</strong>。</p>
+<h3 id="27-桌面客户端">2.7 桌面客户端</h3>
+<p>图形界面(拖拽即用),含四个页面:数据准备、端到端预审、规则库、YOLO
+训练。</p>
+<hr />
+<h2 id="三已知限制">三、已知限制</h2>
+<h3 id="31-门净宽判定存在系统性偏差优先级最高">3.1
+门净宽判定存在系统性偏差(优先级最高)</h3>
+<p>现行算法:取门洞尺寸标注线的像素长度 × 比例尺得到门洞宽,再统一扣减
+0.15
+m(估算门框占用)作为<strong>净宽</strong>(门扣除门框后的实际通行宽度),与规范限值
+0.9 m 比较。</p>
+<p>该方法在阈值附近不稳定:标准单扇门(门洞标定 1.0 m,实测约 1.04
+m)扣减后为 0.89 m,因约 1 cm
+之差被判不合格。同一图纸的标准门会集中落在阈值下方,呈现非真实的批量不合格(欧洲城站实测:32
+扇门中 22 扇如此)。</p>
+<ul>
+<li><strong>影响</strong>:门净宽规则(<code>WIDTH-DOOR-EVAC-001</code>)的不合格结果可靠性低,<strong>须人工复核后采信</strong>;明显偏窄(如
+0.7 m)的门仍能正确识别。</li>
+<li><strong>现状</strong>:本版未做修改,在此如实告知。根因分析与正确解法见
+§六。</li>
+</ul>
+<h3 id="32-yolo-自动识别对稀有类别召回不足">3.2 YOLO
+自动识别对稀有类别召回不足</h3>
+<p>模型基于 9
+个站、十余张图训练,样本量有限。<strong>高频类别识别良好</strong>(闸机、风亭、防火门的
+mAP 均在 0.9 以上;mAP 为衡量识别准确率的综合指标,取值
+0–1,越高越好),<strong>低频类别基本无法识别</strong>(安全出口、商铺因训练样本不足
+20 个,mAP 近 0)。</p>
+<ul>
+<li><strong>影响</strong>:采用方式②(YOLO)时,安全出口、商铺等可能漏检。正式交付建议采用方式①(CVAT
+真值)规避;提升模型需补充更多站点的标注数据重新训练。</li>
+</ul>
+<h3 id="33-结果质量受标注质量制约">3.3 结果质量受标注质量制约</h3>
+<p>采用人工标注通路时,<strong>标注质量直接决定结果准确性</strong>。已发现个别站点(侨社、明海)的门宽标注线长度仅为实际门宽的约一半,导致门宽量测整体失真。接收第三方标注时不应默认其准确,应先经质检。</p>
+<h3 id="34-区域细分不完整">3.4 区域细分不完整</h3>
+<p>规范要求站厅层区分公共区、设备区、付费区、非付费区四类,当前仅识别前三类,<strong>付费区/非付费区尚未拆分</strong>。需扩充标注规范并由标注方补充标注。</p>
+<h3 id="35-比例尺标定的适用条件">3.5 比例尺标定的适用条件</h3>
+<p>系统依赖图纸文字层中的比例标注(如
+<code>1:200</code>)。以下情形会失效或出错:</p>
+<ul>
+<li><strong>扫描件/图片型
+PDF</strong>(无文字层):无法自动标定,须手动指定比例尺。</li>
+<li><strong>同图含多个比例</strong>(如主图 <code>1:200</code> 与示意图
+<code>1:1000</code>
+并存):系统仅取其一,存在误选风险;目前依据整体尺寸合理性大体可选对,但<strong>未实现按视口分区标定</strong>——主图与详图比例混排时,详图区域尺寸将整体失真。</li>
+</ul>
+<h3 id="36-疏散距离为栅格近似">3.6 疏散距离为栅格近似</h3>
+<p>疏散路径在降采样栅格(将公共区简化为粗网格)上计算,<strong>未扣除墙体、柱子等障碍</strong>(默认公共区内部可直线通行),结果为合理近似值而非精确值。且需图中同时具备公共区范围、比例尺、安全出口三项,缺一即跳过该项计算。</p>
+<h3 id="37-产物命名与目录管理风险">3.7 产物命名与目录管理风险</h3>
+<p>产物默认以"站名-图类型"命名;当无法从源文件名识别站名时,退化为不含站名的通用名。此时若人工归档至站点目录,易发生错配(已发生实例:侨社站目录中存放了欧洲城站的预审结果)。<strong>建议核对产物中记录的源图名与所在目录是否一致</strong>。此外,同一图纸重复运行会覆盖既有产物,需保留时应先更改输出路径。</p>
+<h3 id="38-其他边界">3.8 其他边界</h3>
+<ul>
+<li>图纸标注的面积/尺寸数值为<strong>设计方声称值</strong>,系统直接读取,<strong>未做几何复核</strong>;若图纸本身标注有误,系统暂不能发现。</li>
+<li>单个 PDF 仅处理<strong>第一页</strong>,多页图纸不自动拆分。</li>
+<li>OCR 当前仅安装英文/数字识别包,未安装中文识别包。</li>
+<li>规则覆盖<strong>可由几何尺寸判定</strong>的条款;构造做法、材料、设备联动等无法从图面量测的条款不在覆盖范围。</li>
+</ul>
+<hr />
+<h2 id="四外部资源依赖">四、外部资源依赖</h2>
+<ul>
+<li><strong>Python 依赖库</strong>:于项目根目录执行
+<code>pip install -r requirements.txt</code> 一次安装(含训练所需的
+<code>ultralytics</code>)。</li>
+<li><strong>Tesseract OCR</strong>(系统级软件,需单独安装):Windows 安装
+UB-Mannheim 版本至默认目录,系统自动探测;当前仅含英文/数字识别。</li>
+<li><strong>NVIDIA 显卡 + CUDA</strong>(仅训练时需要):本机为 RTX
+5060,已配置。RTX 50
+系训练须使用特定参数(见训练手册),否则会中途失败;<strong>仅做预审、不训练时,无显卡的普通计算机亦可运行(速度较慢)</strong>。</li>
+<li><strong>图纸与标注数据</strong>(保密,不纳入代码仓库,需向项目负责人获取):9
+个站点的矢量 PDF 及对应人工标注。</li>
+<li><strong>随仓库交付、无需另行准备</strong>:训练完成的 YOLO
+权重(<code>models/</code> 目录)、37
+条规则知识库(<code>rules/</code>)。</li>
+</ul>
+<hr />
+<h2 id="五适用前提">五、适用前提</h2>
+<p>满足以下条件方可获得可靠结果:</p>
+<ol type="1">
+<li>输入为<strong>矢量
+PDF</strong>,且文字层含比例标注(否则须手动指定比例尺)。</li>
+<li>采用人工标注时,标注须符合规范(尺寸线完整横跨被测对象、标签合规),见
+<a href="标注规范说明_详细版.md">标注规范说明_详细版.md</a>。</li>
+<li>单次预审针对<strong>单站单图</strong>(站厅层或总平面图),且全图比例统一。</li>
+<li>规则阈值取自内置知识库,<strong>最终判定须经人工复核</strong>。</li>
+</ol>
+<hr />
+<h2 id="六后续改进路线按优先级">六、后续改进路线(按优先级)</h2>
+<table>
+<thead>
+<tr>
+<th>优先级</th>
+<th>事项</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>高</td>
+<td>门净宽判定改造</td>
+<td>解析图纸门型号代码(如 <code>FM甲1023</code> 对应门洞 1.0
+m)取标定宽度,或读取门窗表,替代"像素量测 − 0.15
+m";几何量测降为交叉校验。根治 §3.1。</td>
+</tr>
+<tr>
+<td>高</td>
+<td>拆分付费区/非付费区</td>
+<td>扩充标注规范并由标注方补标,补齐区域四分类。</td>
+</tr>
+<tr>
+<td>中</td>
+<td>接入门窗表</td>
+<td>门窗统计表为门尺寸、防火等级的权威来源,作为门宽判定基准。</td>
+</tr>
+<tr>
+<td>中</td>
+<td>YOLO 增量训练</td>
+<td>补充 8–10 个站点样本,提升安全出口、商铺等低频类别识别率,见 <a
+href="../guides/YOLO增量训练指南.html">继续训练手册</a>。</td>
+</tr>
+<tr>
+<td>中</td>
+<td>比例尺按视口分区标定</td>
+<td>解决同图多比例混排问题。</td>
+</tr>
+<tr>
+<td>低</td>
+<td>疏散路径扣除障碍</td>
+<td>扣除墙、柱并提高栅格精度。</td>
+</tr>
+<tr>
+<td>低</td>
+<td>增加几何复核</td>
+<td>重算面积与设计声称值交叉校验,识别标注笔误。</td>
+</tr>
+<tr>
+<td>低</td>
+<td>产物防覆盖与防错配</td>
+<td>输出目录化;校验产物源图名与归档目录一致性。</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<p><em>本文件随项目更新;发现新的限制或改进请补入对应章节。</em></p>
+
+</body>
+</html>

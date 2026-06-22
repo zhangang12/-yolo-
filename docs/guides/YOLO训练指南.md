@@ -9,7 +9,7 @@
 - **检测类（矩形框）**：safety_exit / stair_escalator / gate(闸机) / commercial_shop / fire_door / val_text / room_title
 - **分割类（多边形，要算面积）**：fire_compartment / 各区域类
 - 一个 **YOLO-seg** 模型可同时输出检测框和分割多边形，不必训两个。
-- 完整词表见 `../reference/label_schema.md`。
+- 完整词表见 `../reference/标注标签说明.md`。
 
 ## 2. 标注要点
 - 工具:本项目用 **CVAT**(产出 CVAT 1.1 XML,`build_dataset.py` 直接读)。标注规范见 `../reference/标注标签说明.md`。

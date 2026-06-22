@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YOLO训练指南</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+         max-width: 1100px; margin: 24px auto; padding: 0 28px; color: #2c3e50;
+         line-height: 1.7; background: #fafbfc; }
+  h1 { color: #c0392b; border-bottom: 3px solid #c0392b; padding-bottom: 10px; }
+  h2 { color: #2980b9; margin-top: 36px; border-left: 5px solid #2980b9; padding-left: 12px; }
+  h3 { color: #27ae60; margin-top: 28px; }
+  h4 { color: #8e44ad; margin-top: 20px; }
+  code { background: #f4f6f8; padding: 2px 6px; border-radius: 3px;
+         font-family: "Consolas", "Monaco", monospace; color: #e74c3c; font-size: 13.5px; }
+  pre { background: #2c3e50; color: #ecf0f1; padding: 14px 18px; border-radius: 6px;
+        overflow-x: auto; font-size: 13.5px; line-height: 1.55; }
+  pre code { background: transparent; color: #ecf0f1; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; background: white; font-size: 14px; }
+  th, td { border: 1px solid #d5dbdb; padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: #34495e; color: white; font-weight: 600; }
+  tr:nth-child(even) td { background: #fbfcfd; }
+  .tip { background: #eafaf1; border-left: 4px solid #27ae60; padding: 10px 16px; margin: 14px 0; border-radius: 0 4px 4px 0; }
+  .warn { background: #fef5e7; border-left: 4px solid #e67e22; padding: 10px 16px; margin: 14px 0; border-radius: 0 4px 4px 0; }
+  .danger { background: #fdedec; border-left: 4px solid #e74c3c; padding: 10px 16px; margin: 14px 0; border-radius: 0 4px 4px 0; }
+  .toc { background: #ecf0f1; padding: 12px 22px; border-radius: 6px; margin: 18px 0 28px; }
+  .toc ol { margin: 6px 0; padding-left: 22px; }
+  .toc a { color: #2980b9; text-decoration: none; }
+  .badge { display: inline-block; padding: 1px 9px; border-radius: 10px; font-size: 12px; font-weight: 600; color: white; margin-right: 4px; }
+  .badge.green { background: #27ae60; }
+  .badge.blue  { background: #2980b9; }
+  .badge.purple { background: #8e44ad; }
+  .badge.orange { background: #e67e22; }
+  .badge.new { background: #e74c3c; }
+  hr { border: none; border-top: 1px dashed #bdc3c7; margin: 30px 0; }
+  .flow { background: #fff; border: 1px solid #d5dbdb; padding: 14px 20px; border-radius: 6px; margin: 14px 0; }
+  .flow-step { padding: 6px 12px; background: #2980b9; color: white; border-radius: 4px;
+               display: inline-block; margin: 4px; font-size: 13px; }
+  .flow-arrow { color: #7f8c8d; font-size: 18px; padding: 0 4px; }
+</style>
+</head>
+<body>
+<h1 id="yolo-训练流程指南">YOLO 训练流程指南</h1>
+<h2 id="总览">总览</h2>
+<pre><code>定类别 → 标注(切片) → 转YOLO格式 → 划分8:1:1 → 配置训练 → 训练 → 评估 → 找错例补标 → 重训(循环)</code></pre>
+<h2 id="1-类别设计">1. 类别设计</h2>
+<ul>
+<li><strong>检测类（矩形框）</strong>：safety_exit / stair_escalator /
+gate(闸机) / commercial_shop / fire_door / val_text / room_title</li>
+<li><strong>分割类（多边形，要算面积）</strong>：fire_compartment /
+各区域类</li>
+<li>一个 <strong>YOLO-seg</strong>
+模型可同时输出检测框和分割多边形，不必训两个。</li>
+<li>完整词表见 <code>../reference/标注标签说明.md</code>。</li>
+</ul>
+<h2 id="2-标注要点">2. 标注要点</h2>
+<ul>
+<li>工具:本项目用 <strong>CVAT</strong>(产出 CVAT 1.1
+XML,<code>build_dataset.py</code> 直接读)。标注规范见
+<code>../reference/标注标签说明.md</code>。</li>
+<li><strong>必须切片</strong>：站厅图是超长条(如
+8228×3339)，整图缩小后闸机/尺寸数字会糊。<code>build_dataset.py</code>
+会自动切成 ~1024×1024 再训练(见 §3)。</li>
+<li>每类 <strong>≥150–300 实例</strong>起步；<strong>一致性 &gt;
+数量</strong>（同类画法全队统一，写进标注手册）。</li>
+</ul>
+<h2 id="3-建数据集build_datasetpy">3.
+建数据集(<code>build_dataset.py</code>)</h2>
+<p>把【CVAT 标注 XML + 对应底图】一键转成 YOLO-seg 训练集。客户端「①
+建数据集」页是它的图形封装。</p>
+<h3 id="31-输入要求">3.1 输入要求</h3>
+<ul>
+<li>一个<strong>标注目录</strong>,里面 <strong>CVAT 的 .xml
+与底图成对存放</strong>。底图按 CVAT 里
+<code>&lt;image name=...&gt;</code>
+去找,支持放在:目录顶层、<code>images/</code>
+子目录、或目录内递归同名。</li>
+<li>标签<strong>中文自动转英文</strong>(复用 <code>fire_anno_tool</code>
+的映射表),所以原始未转英文的 CVAT 也能直接喂。</li>
+<li>进数据集前先过质检:<code>python tools/fire_anno_tool.py qc 标注.xml</code>,<strong>ERROR
+必须为 0</strong>,否则脏标注会污染整批。</li>
+</ul>
+<h3 id="32-运行">3.2 运行</h3>
+<pre class="bash"><code>python app/backend/build_dataset.py  标注目录  dataset  --tile 1024 --overlap 128 --seed 0</code></pre>
+<ul>
+<li><code>--tile 1024</code>:切片边长。站厅图是超长条(如
+8228×3339),不切片缩小后小目标会糊。</li>
+<li><code>--overlap 128</code>:相邻切片重叠像素,避免目标正好被切断。</li>
+<li><code>--seed 0</code>:固定它,每次 train/val/test
+划分一致,便于复现。填 <code>--tile 0</code> = 不切片。</li>
+</ul>
+<h3 id="33-它内部做了什么理解输出">3.3 它内部做了什么(理解输出)</h3>
+<ul>
+<li><strong>box 与 polygon 统一成多边形</strong>:检测框转成 4
+点多边形,一个 YOLO-seg 模型同时出框和分割轮廓。</li>
+<li><strong>尺寸线/疏散线(polyline)不参与训练</strong>:它们没有面积,自动跳过(<code>width_dimension_line</code>
+/ <code>evac_distance_line</code> /
+<code>fire_clearance_line</code>)。这些指标靠几何量测,不靠模型。</li>
+<li><strong>切片</strong>:大图按 tile
+切,标注随之裁剪到瓦片局部坐标;<strong>没有任何标注的纯背景瓦片会被丢弃</strong>。</li>
+<li><strong>划分</strong> train:val:test = 8:1:1。</li>
+<li>产出:<code>images/{train,val,test}/*.png</code>、<code>labels/{train,val,test}/*.txt</code>(每行
+<code>类别id 归一化多边形点…</code>)、<code>data.yaml</code>(类名 +
+路径,直接喂训练)。</li>
+</ul>
+<h3 id="34-warning-类别顺序只能追加不能重排增量训练命脉">3.4 ⚠️
+类别顺序只能追加,不能重排(增量训练命脉)</h3>
+<p>训练类别写在 <code>build_dataset.py</code> 顶部的
+<code>CLASS_NAMES</code>(当前 <strong>16
+类</strong>),<strong>列表下标就是类别 id</strong>。
+新增类别<strong>只能往列表末尾追加</strong>——一旦插入或重排,所有类别 id
+全部错位,<strong>旧的 <code>best.pt</code>
+直接报废、增量训练全乱</strong>。</p>
+<h3 id="35-看产出报告判断数据够不够的第一道关">3.5
+看产出报告——判断数据够不够的第一道关</h3>
+<p>建完会打印<strong>各类实例数</strong>,这是数据质量最重要的体检:</p>
+<pre><code>[建数据集] 源图 18 张 -&gt; 样本(切片后) 349 个
+[建数据集] 划分  train 281 / val 34 / test 34
+[建数据集] 各类实例数:
+    fire_door              450
+    safety_exit              4  ⚠️不足(建议≥150)
+    commercial_shop          0  ❌为0</code></pre>
+<ul>
+<li><strong>≥150</strong>:较稳,mAP 可用。</li>
+<li><strong>&lt;150(⚠️)</strong>:能训但效果一般。</li>
+<li><strong>=0(❌)</strong>:这类压根没标注,训出来必然认不出 →
+要么补标,要么接受它识别不了。</li>
+</ul>
+<p>样本特别少的类(如 <code>safety_exit</code> 只有几个实例),评估 mAP
+大概率接近 0——这是<strong>数据量问题,不是训练参数问题</strong>,调
+epochs/batch 救不了,只能补标注。</p>
+<h2 id="4-训练">4. 训练</h2>
+<p>推荐用项目封装的命令(已带 Windows/RTX 50 系安全默认):</p>
+<pre class="bash"><code>python app/backend/train_yolo.py train  dataset/data.yaml  \
+    --model yolo11s-seg.pt  --epochs 100 --imgsz 1024  \
+    --batch 4 --patience 20 --workers 0 --no-amp --device 0  \
+    --project runs --name exp</code></pre>
+<ul>
+<li><code>--batch 4</code>:适配 8G 显存 @imgsz1024(报 CUDA out of memory
+再调小)。</li>
+<li><code>--workers 0</code>:数据加载单进程,规避 Windows +
+中文路径多进程崩溃。</li>
+<li><code>--no-amp</code>:关闭混合精度,规避 RTX 50 系(Blackwell)偶发
+cudaErrorUnknown。</li>
+<li>客户端「YOLO 训练」页这些已是默认值(AMP 默认关,可勾选开启)。</li>
+</ul>
+<p>等价的原生 ultralytics 写法:</p>
+<pre class="python"><code>from ultralytics import YOLO
+model = YOLO(&#39;yolo11s-seg.pt&#39;)        # 预训练权重迁移学习，别从零训
+model.train(data=&#39;dataset/data.yaml&#39;, epochs=100, imgsz=1024,
+            batch=4, patience=20, workers=0, amp=False)</code></pre>
+<h2 id="5-评估val">5. 评估(<code>val</code>)</h2>
+<h3 id="51-跑评估">5.1 跑评估</h3>
+<pre class="bash"><code>python app/backend/train_yolo.py val  dataset/data.yaml  \
+    --weights runs/segment/runs/exp/weights/best.pt  --imgsz 1024</code></pre>
+<p>客户端「③ 评估」页等价:选 <code>data.yaml</code> + 训练产出的
+<code>best.pt</code>,混淆矩阵图自动显示在右上方。</p>
+<h3 id="52-指标含义先搞懂再看数">5.2 指标含义(先搞懂再看数)</h3>
+<ul>
+<li><strong>mAP50</strong>:IoU(预测框与真值框的重叠度)阈值取 0.5
+时的平均精度,取值 0–1,<strong>整体准确度主指标,越高越好</strong>。</li>
+<li><strong>mAP50-95</strong>:IoU 从 0.5 到 0.95
+逐档平均,更严格(要求框/轮廓更贴合);一般比 mAP50 低。</li>
+<li><strong>P(Precision
+查准率)</strong>:模型判为某类的里头,真正是的比例。高 = 误报少。</li>
+<li><strong>R(Recall
+查全率)</strong>:实际存在的某类里,被模型找出来的比例。高 = 漏检少。</li>
+<li><strong>Box vs Mask</strong>:Box 指标看检测框,Mask
+指标看分割轮廓;<strong>要算面积的类(防火分区)重点看 Mask</strong>。</li>
+</ul>
+<h3 id="53-别只看整体-map务必逐类看">5.3 别只看整体 mAP,务必逐类看</h3>
+<p>整体 mAP
+会被<strong>类别不均衡</strong>带偏:常见类(<code>fire_door</code>/<code>gate</code>)拉高、稀有类(<code>safety_exit</code>)拉低,平均下来看不出问题在哪。
+<strong>逐类看
+P/R/mAP</strong>:哪类低就知道该补哪类数据。本项目实测:<code>gate</code>≈0.99
+/ <code>vent</code>≈0.98 / <code>fire_door</code>≈0.92
+良好;<code>safety_exit</code>/<code>commercial_shop</code>
+因样本太少≈0。</p>
+<h3 id="54-看混淆矩阵--目视抽查">5.4 看混淆矩阵 + 目视抽查</h3>
+<ul>
+<li><strong><code>confusion_matrix.png</code></strong>:对角线越亮越好;<strong>非对角线发亮
+= 两类互相认错</strong>(比如把扶梯认成楼梯);<strong>最后一行/列 =
+与背景混淆</strong>(漏检 / 凭空误检)。</li>
+<li><strong><code>val_batch*_pred.jpg</code></strong>:模型在验证图上的真实预测图,<strong>人眼扫一遍最直观</strong>——框歪没歪、该框的漏没漏、标签贴对没。比单看数字更能发现问题。</li>
+</ul>
+<h3 id="55-合格判断与下一步">5.5 合格判断与下一步</h3>
+<ul>
+<li>数据多的类 mAP 应稳定较高(0.8+);</li>
+<li>若<strong>普遍偏低</strong> → 多半是数据量不足 /
+标注不一致,不是训练参数,调 epochs/batch 救不了;</li>
+<li>想提升某一类 → 回 §3「建数据集」把该类样本补到 ≥150,重新训练。</li>
+</ul>
+<h2 id="6-迭代涨点关键">6. 迭代（涨点关键）</h2>
+<p>拿训好的模型跑新图 → 挑漏检/误检 → <strong>重点补标这些难例</strong>
+→
+加进训练集重训。这个"模型找错→人工补难例→重训"的主动学习循环，比一次性堆数据有效得多。</p>
+<h2 id="7-与本项目的衔接">7. 与本项目的衔接</h2>
+<ul>
+<li>YOLO 只负责"识别"一环：把元素框出来/分割出来。</li>
+<li>数字内容靠
+OCR；面积/距离/净宽靠几何计算；疏散路径靠图算法；判违规靠规则引擎。</li>
+<li>训练数据用 <code>fire_anno_tool.py qc</code>
+自检通过后再进训练。</li>
+</ul>
+<h2 id="8-常见报错与处理">8. 常见报错与处理</h2>
+<p>本项目在 Windows + RTX 50 系(Blackwell)上踩过的坑,GUI/CLI
+安全默认已规避;手动调参或换机时可能复现:</p>
+<table>
+<thead>
+<tr>
+<th>报错信息(关键字)</th>
+<th>原因</th>
+<th>处理</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>CUDA out of memory</code> /
+<code>Reducing to batch=N and retrying</code></td>
+<td>一次喂的图太多,显存(8G)装不下</td>
+<td>调小 <code>--batch</code>(8G@1024 用 <strong>4</strong>);别同时把
+imgsz 调大</td>
+</tr>
+<tr>
+<td><code>[WinError 1455] 页面文件太小</code> / 加载
+<code>cublas64_*.dll</code> 失败</td>
+<td>多进程数据加载,每个 worker 子进程都加载 torch/CUDA,撑爆虚拟内存</td>
+<td><code>--workers 0</code>(单进程,已是默认);并把 Windows
+虚拟内存(页面文件)调到 ≥16G 或设"系统管理"</td>
+</tr>
+<tr>
+<td><code>cudaErrorUnknown</code> / 训练到一半 NaN 或崩</td>
+<td>RTX 50 系 + PyTorch 自动混合精度(AMP)偶发不兼容</td>
+<td><code>--no-amp</code> 关闭 AMP(GUI 训练页默认就关)</td>
+</tr>
+<tr>
+<td><code>Download failure ... yolo26n.pt</code> /
+<code>schannel ... CRYPT_E_REVOCATION_OFFLINE</code></td>
+<td>离线/证书吊销检查失败,AMP 自检下载不到小模型</td>
+<td><strong>无害</strong>,会自动跳过 AMP 自检继续训;彻底关掉用
+<code>--no-amp</code></td>
+</tr>
+<tr>
+<td><code>Couldn't open shared file mapping</code></td>
+<td>同上多进程共享内存问题(Windows + 中文路径)</td>
+<td><code>--workers 0</code></td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>一句话:在这台机器/类似配置上,<strong><code>--batch 4 --workers 0 --no-amp</code>
+三件套</strong>能避开以上绝大多数坑。客户端「YOLO
+训练」页已内置这套默认。</p>
+</blockquote>
+
+</body>
+</html>

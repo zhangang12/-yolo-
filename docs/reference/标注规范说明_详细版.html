@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>标注规范说明_详细版</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+         max-width: 1100px; margin: 24px auto; padding: 0 28px; color: #2c3e50;
+         line-height: 1.7; background: #fafbfc; }
+  h1 { color: #c0392b; border-bottom: 3px solid #c0392b; padding-bottom: 10px; }
+  h2 { color: #2980b9; margin-top: 36px; border-left: 5px solid #2980b9; padding-left: 12px; }
+  h3 { color: #27ae60; margin-top: 28px; }
+  h4 { color: #8e44ad; margin-top: 20px; }
+  code { background: #f4f6f8; padding: 2px 6px; border-radius: 3px;
+         font-family: "Consolas", "Monaco", monospace; color: #e74c3c; font-size: 13.5px; }
+  pre { background: #2c3e50; color: #ecf0f1; padding: 14px 18px; border-radius: 6px;
+        overflow-x: auto; font-size: 13.5px; line-height: 1.55; }
+  pre code { background: transparent; color: #ecf0f1; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; background: white; font-size: 14px; }
+  th, td { border: 1px solid #d5dbdb; padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: #34495e; color: white; font-weight: 600; }
+  tr:nth-child(even) td { background: #fbfcfd; }
+  .tip { background: #eafaf1; border-left: 4px solid #27ae60; padding: 10px 16px; margin: 14px 0; border-radius: 0 4px 4px 0; }
+  .warn { background: #fef5e7; border-left: 4px solid #e67e22; padding: 10px 16px; margin: 14px 0; border-radius: 0 4px 4px 0; }
+  .danger { background: #fdedec; border-left: 4px solid #e74c3c; padding: 10px 16px; margin: 14px 0; border-radius: 0 4px 4px 0; }
+  .toc { background: #ecf0f1; padding: 12px 22px; border-radius: 6px; margin: 18px 0 28px; }
+  .toc ol { margin: 6px 0; padding-left: 22px; }
+  .toc a { color: #2980b9; text-decoration: none; }
+  .badge { display: inline-block; padding: 1px 9px; border-radius: 10px; font-size: 12px; font-weight: 600; color: white; margin-right: 4px; }
+  .badge.green { background: #27ae60; }
+  .badge.blue  { background: #2980b9; }
+  .badge.purple { background: #8e44ad; }
+  .badge.orange { background: #e67e22; }
+  .badge.new { background: #e74c3c; }
+  hr { border: none; border-top: 1px dashed #bdc3c7; margin: 30px 0; }
+  .flow { background: #fff; border: 1px solid #d5dbdb; padding: 14px 20px; border-radius: 6px; margin: 14px 0; }
+  .flow-step { padding: 6px 12px; background: #2980b9; color: white; border-radius: 4px;
+               display: inline-block; margin: 4px; font-size: 13px; }
+  .flow-arrow { color: #7f8c8d; font-size: 18px; padding: 0 4px; }
+</style>
+</head>
+<body>
+<h1 id="消防设计图纸-ai-标注规范说明详细版-v3">消防设计图纸 AI
+标注规范说明（详细版 v3）</h1>
+<blockquote>
+<p>适用：地铁车站消防报建图（总平面图 +
+站厅层平面图）的数据标注，用于训练 AI 并自动比对消防规范。
+本版相对前版的三大改动：①去掉"文字类"冗余标注（改由程序从矢量直抽）②补齐缺失标签（闸机、安全出口）③新增防火分区划分专项规则。</p>
+</blockquote>
+<hr />
+<h2 id="0-总则">0. 总则</h2>
+<ol type="1">
+<li><strong>优先用带文字层的矢量
+PDF</strong>。文字相关数据（分区编号/面积/房间名/尺寸数字/属性文字）<strong>由程序直接抽取，标注团队不标</strong>（见第
+8 节）。无文字层的图（如贝尔路、明海）才回退人工标文字。</li>
+<li><strong>标注团队的核心任务 =
+标"图形符号"和"轮廓多边形"</strong>——这些没有文字、程序认不出，必须人工。</li>
+<li><strong>防火分区一律照图纸自带的"防火分区示意图"描</strong>，不得凭房间自行分区（见第
+5 节）。</li>
+<li><strong>标签名 100% 英文
+snake_case</strong>，与本规范附表完全一致，不得拼错、不得用中文、不得混用。</li>
+<li>每批提交前用质检脚本 <code>fire_anno_tool.py qc</code> 自检，零
+ERROR 才可交付。</li>
+<li>交付格式 <strong>CVAT XML
+1.1</strong>，保留多边形全部顶点、框宽高、属性值。</li>
+</ol>
+<hr />
+<h2 id="1-标注范围总览">1. 标注范围总览</h2>
+<table>
+<thead>
+<tr>
+<th>图纸</th>
+<th>标注团队<strong>要标</strong>（本规范第 3、4 节）</th>
+<th>程序<strong>直抽</strong>、团队<strong>不标</strong>（第 8 节）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>站厅层</td>
+<td>fire_compartment、public_area、commercial_shop、safety_exit、stair_escalator、gate、fire_door、fire_shutter、draft_curtain</td>
+<td>分区编号/面积、房间名、各类尺寸数字、疏散距离值</td>
+</tr>
+<tr>
+<td>总平面图</td>
+<td>station_exit_ground、vent_group_ground、surrounding_building</td>
+<td>建筑属性文字、风亭类别文字、防火间距尺寸数字</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="2-通用标注规则">2. 通用标注规则</h2>
+<ul>
+<li><strong>几何类型</strong>：
+<ul>
+<li><code>框(box)</code>：图形符号对象（出口、楼梯、门、闸机等）。框要<strong>紧贴符号</strong>，不留多余空白、不切掉。</li>
+<li><code>多边形(polygon)</code>：区域/轮廓（防火分区、商铺、周边建筑等）。顶点须落在真实边界线上。</li>
+<li><code>线(polyline)</code>：仅在无文字层、需人工标尺寸线时使用（见第
+8 节说明）。</li>
+</ul></li>
+<li><strong>坐标精度</strong>：多边形在转角/节点处误差 <strong>≤ ±2
+像素</strong>（防火分区尤其严格，决定闭合判定）。</li>
+<li><strong>不漏不重</strong>：同一对象只标一次；同类对象不得遗漏。</li>
+<li><strong>标签语言</strong>：英文
+snake_case（附表为准）；属性键也用英文，属性值可用中文枚举。</li>
+</ul>
+<hr />
+<h2 id="3-站厅层--逐标签详细规则">3. 站厅层 — 逐标签详细规则</h2>
+<h3 id="31-fire_compartment防火分区-polygon-重点">3.1
+<code>fire_compartment</code>（防火分区）— polygon ★重点</h3>
+<ul>
+<li><strong>画法</strong>：严格照图纸"防火分区示意图"，沿<strong>防火墙
+/ 特级防火卷帘 /
+防火门</strong>勾勒<strong>完整闭合</strong>多边形。</li>
+<li><strong>属性
+<code>zone_type</code></strong>（必填，三选一）：<code>公共区</code> /
+<code>无人区</code> / <code>有人值守区</code>。</li>
+<li><strong>闭合要求</strong>：首尾顶点重合，转角误差
+≤2px，边界贴墙内中线；用防火卷帘分隔处，顶点须落在卷帘线上。</li>
+<li><strong>关键约束</strong>（详见第 5
+节）：一个分区<strong>通常含多个房间</strong>；泵房/厕所<strong>不单独成区</strong>。</li>
+<li><strong>常见错误</strong>：❌一房一区　❌把消防泵房/污水泵房单独画成一个分区　❌边界没闭合/没贴防火墙。</li>
+</ul>
+<h3 id="32-public_area站厅公共区-polygon">3.2
+<code>public_area</code>（站厅公共区）— polygon</h3>
+<ul>
+<li><strong>画法</strong>：付费区 +
+非付费区合并后的公共活动空间整体边界。</li>
+<li><strong>常见错误</strong>：❌漏掉非付费区　❌把设备区也圈进来。</li>
+</ul>
+<h3 id="33-commercial_shop商铺-polygon-易错">3.3
+<code>commercial_shop</code>（商铺）— polygon ★易错</h3>
+<ul>
+<li><strong>画法</strong>：<strong>只标公共区内真正的商铺</strong>，沿商铺边界画。</li>
+<li><strong>常见错误</strong>：🔴<strong>把每个房间/隔间都标成商铺</strong>（历史批次出现
+30 个商铺=房间数，严重错误）。规范公共区商铺 ≤3
+个，正常一张图商铺很少。<strong>标之前先确认那确实是商业铺位，不是设备房。</strong></li>
+</ul>
+<h3 id="34-safety_exit安全出口-box-新增必标">3.4
+<code>safety_exit</code>（安全出口）— box ★新增必标</h3>
+<ul>
+<li><strong>画法</strong>：框住"安全出口"图例/标识（疏散指示、EXIT
+标志或楼梯/通道在公共区的出口位置）。</li>
+<li><strong>用途</strong>：疏散个数与距离计算的起终点。</li>
+<li><strong>常见错误</strong>：❌漏标（疏散计算就没有终点）。</li>
+</ul>
+<h3 id="35-stair_escalator楼梯扶梯-box">3.5
+<code>stair_escalator</code>（楼梯/扶梯）— box</h3>
+<ul>
+<li><strong>画法</strong>：框住站厅通向站台/出入口的楼梯、扶梯符号侧边范围。</li>
+</ul>
+<h3 id="36-gate闸机-box-新增必标">3.6 <code>gate</code>（闸机）— box
+★新增必标</h3>
+<ul>
+<li><strong>画法</strong>：框住闸机符号（AFC
+进出站闸机阵列，逐个或逐排框）。</li>
+<li><strong>常见错误</strong>：🔴<strong>整类遗漏</strong>（历次批次都没标，必须补）。</li>
+</ul>
+<h3 id="37-fire_door防火门-box">3.7 <code>fire_door</code>（防火门）—
+box</h3>
+<ul>
+<li><strong>画法</strong>：框住防火门符号，<strong>包含开启方向弧线</strong>。</li>
+<li><strong>属性</strong>：
+<ul>
+<li><code>class</code>（必填，三选一）：
+<ul>
+<li><code>甲级</code>：旁边写 "FM甲"</li>
+<li><code>乙级</code>：旁边写 "FM乙"</li>
+<li><code>unknown</code>：图上<strong>没有 FM
+字样</strong>（设备区房间间小门常见）。<strong>不要凭经验猜</strong>，QC
+会汇总 unknown 清单交设计师/消防工程师批量补字。</li>
+</ul></li>
+<li><code>swing_dir</code>（必填）：<code>顺着疏散方向</code> /
+<code>逆着疏散方向</code>（看门扇弧线朝向）。</li>
+</ul></li>
+<li><strong>常见错误</strong>：❌没把开启弧线框进去　❌属性漏填　❌看不到
+FM 字样就漏标整扇门（应标 box，class 填 <code>unknown</code>）。</li>
+</ul>
+<h3 id="38-fire_shutter防火卷帘-box">3.8
+<code>fire_shutter</code>（防火卷帘）— box</h3>
+<ul>
+<li><strong>画法</strong>：框住特级防火卷帘符号/编号（如
+FJLM3630）。</li>
+<li><strong>用途</strong>：作为防火分区边界依据，分区多边形顶点须与其重合。</li>
+</ul>
+<h3 id="39-draft_curtain挡烟垂壁-box">3.9
+<code>draft_curtain</code>（挡烟垂壁）— box</h3>
+<ul>
+<li><strong>画法</strong>：框住挡烟垂壁标志线。</li>
+</ul>
+<hr />
+<h2 id="4-总平面图--逐标签详细规则">4. 总平面图 — 逐标签详细规则</h2>
+<h3 id="41-station_exit_ground车站地面出入口疏散口-polygon">4.1
+<code>station_exit_ground</code>（车站地面出入口/疏散口）— polygon</h3>
+<ul>
+<li><strong>画法</strong>：A/B/C
+出入口、地面垂梯、紧急疏散口暴露在地面的结构外墙投影面。</li>
+</ul>
+<h3 id="42-vent_group_ground风亭风亭组-polygon">4.2
+<code>vent_group_ground</code>（风亭/风亭组）— polygon</h3>
+<ul>
+<li><strong>画法</strong>：各号风亭/风亭组的地面结构外轮廓；高风亭标底座投影。</li>
+<li><strong>属性</strong>（文字层能直读时由程序填，<strong>文字打散成曲线
+/ 复制不出来时</strong>由标注员对照图例肉眼录入）：
+<ul>
+<li><code>vent_function</code>（必填，枚举）：<code>新风</code> /
+<code>排风</code> / <code>活塞风</code> / <code>冷却塔风</code> /
+<code>排烟</code>。规则引擎判"新风与排风/活塞风口距离
+≥10m"必须靠这个。</li>
+<li><code>discharge_type</code>（必填，枚举）：<code>侧出</code> /
+<code>敞口</code> /
+<code>高风亭</code>。括号里的"（侧出）/（敞口）"直接录入；高风亭看图上是否单列"高风亭"标注。</li>
+<li><code>name</code>（可选）：自由文本，如 <code>2号风亭排风井</code> /
+<code>冷却塔风井</code>，便于追溯。</li>
+<li><code>area_m2</code>（可选）：图上写明的风口面积（如"侧出风口面积
+24m²"）。</li>
+</ul></li>
+<li><strong>常见错误</strong>：❌只标多边形不填
+<code>vent_function</code>，规则引擎无法判风口距离　❌把"侧出"塞进
+<code>vent_function</code>（应在 <code>discharge_type</code>）。</li>
+</ul>
+<h3 id="43-surrounding_building周边建筑-polygon-必标">4.3
+<code>surrounding_building</code>（周边建筑）— polygon ★必标</h3>
+<ul>
+<li><strong>画法</strong>：图纸红线内外、影响防火间距的既有/规划建筑，沿外墙投影画（如"尚游公馆""上油松村民房""规划龙辉花园建筑"）。</li>
+<li><strong>属性</strong>（文字层能直读时由程序填，<strong>文字打散成曲线
+/
+复制不出来时</strong>由标注员对照建筑旁文字录入；防火间距判定全靠这几个字段）：
+<ul>
+<li><code>name</code>（必填）：建筑名称，自由文本，如
+<code>规划龙辉花园建筑</code> / <code>尚游公馆</code>。</li>
+<li><code>building_type</code>（必填，枚举）：<code>多层民用</code> /
+<code>高层民用</code> / <code>超高层民用</code> / <code>丙类厂房</code>
+/ <code>丁戊类厂房</code> / <code>甲乙类厂房库房</code> /
+<code>加油加气加氢站</code> / <code>其他</code> /
+<code>unknown</code>。<strong>判档靠高度/层数</strong>：住宅
+&gt;27m、公建 &gt;24m 为高层，&gt;100m
+为超高层。<strong>图上既无层数也无高度、无法判定时填
+<code>unknown</code></strong>（注意
+<code>unknown</code>≠<code>其他</code>：<code>其他</code>指非民用非厂房的类别，<code>unknown</code>
+指信息缺失待补），由设计师/消防工程师后补。住宅、商业、办公、酒店、医院、学校等都属民用建筑，按高度归多层/高层/超高层民用，<strong>不要填
+<code>其他</code></strong>。</li>
+<li><code>fire_rating</code>（必填，枚举）：<code>一级</code> /
+<code>二级</code> / <code>三级</code> / <code>四级</code> /
+<code>unknown</code>。图上无此信息时填
+<code>unknown</code>，由设计师/消防工程师后补。</li>
+<li><code>floors</code>（可选，整数）：层数，如
+<code>48</code>（图上"住宅48F"）。</li>
+<li><code>height_m</code>（可选，数值）：建筑高度（米），便于区分高层（&gt;24m）。</li>
+</ul></li>
+<li><strong>常见错误</strong>：🔴<strong>整类遗漏</strong>（历次都缺，导致防火间距完全无法审查，必须补全）。❌只画多边形不填
+<code>building_type</code> /
+<code>fire_rating</code>，防火间距规则取不到分支阈值。</li>
+</ul>
+<blockquote>
+<p><strong>重要</strong>：周边建筑的属性文字（"规划龙辉花园建筑/超高层居住建筑/耐火等级一级"那类）<strong>不要框文字、不要用
+<code>has_dimension</code> 关联</strong>——直接把这三项录进
+<code>surrounding_building</code>
+多边形的属性里即可。复制不出来的就肉眼读。</p>
+</blockquote>
+<hr />
+<h2 id="5-防火分区划分专项规则-最易出错">5. 防火分区划分专项规则
+★最易出错</h2>
+<ol type="1">
+<li><strong>以"防火分区示意图"为唯一依据</strong>。图纸右上/右下角的防火分区示意图（按颜色分区+面积表）是标准答案，<strong>照着描</strong>，不得自行按房间划分。</li>
+<li><strong>一个防火分区 =
+一片区域，含多个房间</strong>，由防火墙/防火卷帘整片围合，<strong>不是一房一区</strong>。</li>
+<li><strong>泵房/厕所"不计入面积"≠"独立成区"</strong>：消防水泵房、污水/废水泵房、厕所、盥洗等，面积可不计入所在分区，但<strong>它们仍属于相邻的某个分区，不单独画成一个分区</strong>。</li>
+<li><strong>新风/排风道与环控机房划为同一分区</strong>，不要单独切出去。</li>
+<li><strong>分区类型</strong>用 <code>zone_type</code> 标注：公共区 /
+无人区 / 有人值守区。</li>
+<li><strong>面积红线</strong>（程序自动算，标注只需画准边界）：公共区每分区
+≤5000㎡；设备管理区每分区 ≤1500㎡（地下）。</li>
+<li>最终分区合理性由<strong>有资质消防设计/审查人员</strong>确认；标注团队只负责"照示意图准确描出闭合边界"。</li>
+</ol>
+<hr />
+<h2 id="6-属性字段规范枚举">6. 属性字段规范（枚举）</h2>
+<table>
+<thead>
+<tr>
+<th>属性键</th>
+<th>适用标签</th>
+<th>允许取值</th>
+<th>必填</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>zone_type</code></td>
+<td>fire_compartment</td>
+<td>公共区 / 无人区 / 有人值守区</td>
+<td>是</td>
+</tr>
+<tr>
+<td><code>class</code></td>
+<td>fire_door</td>
+<td>甲级 / 乙级 / <strong>unknown</strong>（图上无 FM 字时）</td>
+<td>是</td>
+</tr>
+<tr>
+<td><code>swing_dir</code></td>
+<td>fire_door</td>
+<td>顺着疏散方向 / 逆着疏散方向</td>
+<td>是</td>
+</tr>
+<tr>
+<td><code>vent_function</code></td>
+<td>vent_group_ground</td>
+<td>新风 / 排风 / 活塞风 / 冷却塔风 / 排烟</td>
+<td>是</td>
+</tr>
+<tr>
+<td><code>discharge_type</code></td>
+<td>vent_group_ground</td>
+<td>侧出 / 敞口 / 高风亭</td>
+<td>是</td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td>vent_group_ground / surrounding_building</td>
+<td>自由文本（建筑或风亭名称）</td>
+<td>vent 可选 / building 必填</td>
+</tr>
+<tr>
+<td><code>area_m2</code></td>
+<td>vent_group_ground</td>
+<td>数值（风口面积，图上有则填）</td>
+<td>否</td>
+</tr>
+<tr>
+<td><code>building_type</code></td>
+<td>surrounding_building</td>
+<td>多层民用 / 高层民用 / 超高层民用 / 丙类厂房 / 丁戊类厂房 /
+甲乙类厂房库房 / 加油加气加氢站 / 其他 /
+<strong>unknown</strong>（图上无层数/高度、无法判定档位时）</td>
+<td>是</td>
+</tr>
+<tr>
+<td><code>fire_rating</code></td>
+<td>surrounding_building</td>
+<td>一级 / 二级 / 三级 / 四级 / <strong>unknown</strong></td>
+<td>是</td>
+</tr>
+<tr>
+<td><code>floors</code></td>
+<td>surrounding_building</td>
+<td>整数（层数）</td>
+<td>否</td>
+</tr>
+<tr>
+<td><code>height_m</code></td>
+<td>surrounding_building</td>
+<td>数值（高度 m）</td>
+<td>否</td>
+</tr>
+<tr>
+<td><code>text_content</code></td>
+<td>（仅无文字层时的文字框）</td>
+<td>原文字符串</td>
+<td>视情况</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>⚠️ 属性键必须是上面这些英文键，<strong>不得出现
+<code>.</code>、空键、中文键</strong>（历史批次出现 <code>.</code>
+垃圾键，禁止）。</p>
+<p>⚠️ <strong>凡是 <code>unknown</code> 的字段</strong>（class /
+fire_rating / building_type 等）会被 QC
+工具汇总成一份清单，交给设计单位/消防工程师批量补字。规则引擎遇到
+unknown 不会误报合规/违规，会返回
+<code>review_required</code>（待人工复核）。</p>
+</blockquote>
+<hr />
+<h2 id="7-关系绑定仅保留必要部分">7. 关系绑定（仅保留必要部分）</h2>
+<p>带文字层时尺寸值由程序直抽，<strong>99%
+自动绑定靠就近原则</strong>，标注员不用动手。</p>
+<p><strong>只在两类情形下人工补关系：</strong></p>
+<h3
+id="71-has_dimension对象--数字仅当多个数字挤在一起程序分不清谁是谁时">7.1
+<code>has_dimension</code>：对象 →
+数字（仅当多个数字挤在一起、程序分不清谁是谁时）</h3>
+<ul>
+<li>例：一扇防火门旁同时写了 <code>1.05</code>(洞口宽) /
+<code>0.9</code>(净宽) / <code>FM-1</code>(编号) /
+<code>1.5h</code>(耐火) → 标注员把"0.9"这个数字框作为子对象，连一条
+<code>has_dimension</code> 到防火门 box</li>
+<li>适用主对象：<code>fire_door</code> box / 程序抽出来的尺寸线</li>
+<li>适用子对象：程序抽出来的数字框（<strong>不是文字框</strong>）</li>
+</ul>
+<h3 id="72-属性文字不要用-has_dimension">7.2 属性文字不要用
+<code>has_dimension</code></h3>
+<p><strong>误用预警</strong>：周边建筑的"耐火等级一级 /
+超高层居住建筑"、风亭的"侧出 /
+敞口"这种<strong>属性文字</strong>，<strong>不用关系绑定</strong>，<strong>直接录进对象的属性键</strong>（<code>fire_rating</code>
+/ <code>building_type</code> / <code>vent_function</code> /
+<code>discharge_type</code>），无论文字能不能复制都一样。</p>
+<h3 id="73-何时不用做任何关系">7.3 何时不用做任何关系</h3>
+<p>绝大多数情况：数字唯一、对象唯一、就近能配对。标注员什么都不用做，程序自动配。</p>
+<hr />
+<h2 id="8-不需要标注的内容程序从矢量直抽">8.
+不需要标注的内容（程序从矢量直抽）</h2>
+<p>以下数据<strong>带文字层时一律由程序直接抽取，标注团队不标</strong>，避免重复劳动和人工录入错误：</p>
+<table>
+<thead>
+<tr>
+<th>数据</th>
+<th>原因</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>防火分区编号/面积/类型文字</td>
+<td>文字层直读（如"防火分区一（公共区）3861.71㎡"）</td>
+</tr>
+<tr>
+<td>房间名称</td>
+<td>文字层直读</td>
+</tr>
+<tr>
+<td>门宽/走道宽/楼梯宽等尺寸数字</td>
+<td>文字层直读</td>
+</tr>
+<tr>
+<td>疏散距离数值</td>
+<td>文字层直读</td>
+</tr>
+<tr>
+<td>周边建筑属性（耐火等级/层数/类别）</td>
+<td>文字层直读</td>
+</tr>
+<tr>
+<td>风亭类别文字</td>
+<td>文字层直读</td>
+</tr>
+<tr>
+<td>防火间距尺寸数字</td>
+<td>文字层直读</td>
+</tr>
+<tr>
+<td>墙线/尺寸线几何坐标</td>
+<td>矢量几何直抽</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>例外</strong>：无文字层的图纸（文字被打散成曲线），上述文字类回退人工标注（box+text_content），并视为"为
+OCR 模型造训练数据"。</p>
+</blockquote>
+<h3 id="81-30-秒自检这张图有没有文字层">8.1 30
+秒自检：这张图有没有文字层？</h3>
+<p>拿到一张 PDF 图纸先做这个判断：</p>
+<ol type="1">
+<li>用 PDF 阅读器（Adobe / Foxit / 浏览器）打开</li>
+<li><strong>鼠标拖选</strong>图纸上任意一段文字（分区编号、房间名、尺寸数字都行）</li>
+<li><strong>Ctrl+C 复制</strong>到记事本看看：
+<ul>
+<li>✅ <strong>能选中、复制出原文字</strong> →
+有文字层，所有数字/属性文字程序直抽，标注员<strong>不用录任何文字</strong></li>
+<li>❌ <strong>选不中 / 复制出来是空白 / 是方块乱码</strong> →
+文字打散了，按"无文字层"流程处理</li>
+</ul></li>
+</ol>
+<h3 id="82-无文字层时怎么标分两种情况">8.2
+无文字层时怎么标？分两种情况</h3>
+<table>
+<thead>
+<tr>
+<th>文字类型</th>
+<th>处理方式</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>对象的属性文字</strong>（建筑耐火等级/类型、风亭功能/出风方式、防火门
+FM 级别）</td>
+<td><strong>直接录进对象的属性键</strong>（<code>fire_rating</code> /
+<code>building_type</code> / <code>vent_function</code> /
+<code>discharge_type</code> /
+<code>class</code>）。不要单独框文字、不要做关系绑定。</td>
+</tr>
+<tr>
+<td><strong>散落的数字</strong>（尺寸、面积、疏散距离）</td>
+<td>框 <code>box</code> + 填 <code>text_content</code>
+属性，相当于人工帮 OCR 补真值。这些标注会被收集为后续 OCR
+模型的训练数据。</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="9-质量验收dod">9. 质量验收（DoD）</h2>
+<ol type="1">
+<li><strong>格式自检</strong>：<code>python fire_anno_tool.py qc 标注.xml</code>
+—— 零 ERROR。</li>
+<li><strong>完整性</strong>：必现类零缺失（总平面图必有
+surrounding_building；站厅层必有 ≥2 个 fire_compartment
+含设备区、safety_exit、gate）。</li>
+<li><strong>几何</strong>：多边形闭合、转角 ≤2px、框紧贴对象。</li>
+<li><strong>金标准</strong>：与专家精标的样图比对，框 IoU
+≥0.9、标签一致率 ≥95%。</li>
+<li><strong>人工抽检</strong>：错误率 &lt;5%（稀有/高危类全检，常见类抽
+10–20%）。</li>
+</ol>
+<hr />
+<h2 id="10-常见错误红线清单提交前自查">10.
+常见错误红线清单（提交前自查）</h2>
+<ul>
+<li>🔴 周边建筑（surrounding_building）漏标 → 防火间距无法审</li>
+<li>🔴 设备区防火分区漏标（只标了公共区）</li>
+<li>🔴 闸机（gate）整类漏标</li>
+<li>🔴 安全出口（safety_exit）漏标</li>
+<li>🔴 把房间/隔间误标成商铺（商铺数 = 房间数是典型信号）</li>
+<li>🔴 把消防泵房/污水泵房单独画成一个防火分区</li>
+<li>🟠 标签用中文 / 拼错 / 属性键出现 <code>.</code> 或空键</li>
+<li>🟠 防火分区没闭合、没贴防火墙</li>
+<li>🟠 防火门没框进开启弧线、class/swing_dir 漏填</li>
+<li>🟠 周边建筑只画了多边形，没填 <code>building_type</code> /
+<code>fire_rating</code>（防火间距规则没法跑）</li>
+<li>🟠 风亭没填
+<code>vent_function</code>（"新风与排风口距离"规则没法跑）</li>
+<li>🟠 把"侧出/敞口"塞进 <code>vent_function</code>（应在
+<code>discharge_type</code>）</li>
+<li>🟠 看不到 FM 字样的防火门漏标整扇门（应标 box，class 填
+<code>unknown</code>）</li>
+<li>🟠 用 <code>has_dimension</code>
+关联属性文字（应直接录进对象属性键）</li>
+</ul>
+<hr />
+<h2 id="11-交付格式">11. 交付格式</h2>
+<ul>
+<li>文件：CVAT XML 1.1（每张图一个 annotations.xml + 对应底图）。</li>
+<li>底图：高 DPI（≥200）渲染，保证闸机/小符号清晰；大图按 ~1024²
+切片。</li>
+<li>命名：与车站、图纸类型对应，便于追溯。</li>
+<li>标签/属性键：全英文 snake_case，与本规范附表一致。</li>
+</ul>
+<hr />
+<p><em>本规范为 MVP
+阶段标注依据，随项目推进迭代。防火分区等专业判定最终以注册消防工程师/审查意见为准。</em></p>
+
+</body>
+</html>

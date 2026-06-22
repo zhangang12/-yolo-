@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CVAT模板导入指南</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+         max-width: 1100px; margin: 24px auto; padding: 0 28px; color: #2c3e50;
+         line-height: 1.7; background: #fafbfc; }
+  h1 { color: #c0392b; border-bottom: 3px solid #c0392b; padding-bottom: 10px; }
+  h2 { color: #2980b9; margin-top: 36px; border-left: 5px solid #2980b9; padding-left: 12px; }
+  h3 { color: #27ae60; margin-top: 28px; }
+  h4 { color: #8e44ad; margin-top: 20px; }
+  code { background: #f4f6f8; padding: 2px 6px; border-radius: 3px;
+         font-family: "Consolas", "Monaco", monospace; color: #e74c3c; font-size: 13.5px; }
+  pre { background: #2c3e50; color: #ecf0f1; padding: 14px 18px; border-radius: 6px;
+        overflow-x: auto; font-size: 13.5px; line-height: 1.55; }
+  pre code { background: transparent; color: #ecf0f1; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; background: white; font-size: 14px; }
+  th, td { border: 1px solid #d5dbdb; padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: #34495e; color: white; font-weight: 600; }
+  tr:nth-child(even) td { background: #fbfcfd; }
+  .tip { background: #eafaf1; border-left: 4px solid #27ae60; padding: 10px 16px; margin: 14px 0; border-radius: 0 4px 4px 0; }
+  .warn { background: #fef5e7; border-left: 4px solid #e67e22; padding: 10px 16px; margin: 14px 0; border-radius: 0 4px 4px 0; }
+  .danger { background: #fdedec; border-left: 4px solid #e74c3c; padding: 10px 16px; margin: 14px 0; border-radius: 0 4px 4px 0; }
+  .toc { background: #ecf0f1; padding: 12px 22px; border-radius: 6px; margin: 18px 0 28px; }
+  .toc ol { margin: 6px 0; padding-left: 22px; }
+  .toc a { color: #2980b9; text-decoration: none; }
+  .badge { display: inline-block; padding: 1px 9px; border-radius: 10px; font-size: 12px; font-weight: 600; color: white; margin-right: 4px; }
+  .badge.green { background: #27ae60; }
+  .badge.blue  { background: #2980b9; }
+  .badge.purple { background: #8e44ad; }
+  .badge.orange { background: #e67e22; }
+  .badge.new { background: #e74c3c; }
+  hr { border: none; border-top: 1px dashed #bdc3c7; margin: 30px 0; }
+  .flow { background: #fff; border: 1px solid #d5dbdb; padding: 14px 20px; border-radius: 6px; margin: 14px 0; }
+  .flow-step { padding: 6px 12px; background: #2980b9; color: white; border-radius: 4px;
+               display: inline-block; margin: 4px; font-size: 13px; }
+  .flow-arrow { color: #7f8c8d; font-size: 18px; padding: 0 4px; }
+</style>
+</head>
+<body>
+<h1 id="cvat-项目模板导入指引">CVAT 项目模板导入指引</h1>
+<p>锁死下拉菜单，从源头杜绝错名标签 / 非法属性键 / 拼写错误。</p>
+<hr />
+<h2 id="总结">总结</h2>
+<p><code>rules/cvat_labels.json</code> 这个文件，在 CVAT
+<strong>新建项目</strong>时一次性贴进去，
+之后标注员的标签和属性值就<strong>只能从下拉菜单选</strong>，连"注释""宽度线""楼梯/扶梯"
+这些规范里没有的标签都创建不出来。</p>
+<hr />
+<h2 id="操作步骤5-分钟">操作步骤（5 分钟）</h2>
+<h3 id="1-拿到最新的-labelsjson">1. 拿到最新的 labels.json</h3>
+<p>从代码仓库取最新的 <code>rules/cvat_labels.json</code>（共 20
+个标签，覆盖站厅层+总平面图所有受控词表）。 也可以本地用工具生成：</p>
+<pre class="bash"><code>python tools/fire_anno_tool.py export-cvat-labels rules/cvat_labels.json</code></pre>
+<h3 id="2-在-cvat-后台新建项目">2. 在 CVAT 后台新建项目</h3>
+<p>CVAT 主界面 → 左上 <code>+</code> 按钮 →
+<code>Create new project</code>，填项目名（如"消防图纸标注_v2"）。</p>
+<h3 id="3-切到-raw-模式贴模板">3. 切到 Raw 模式贴模板</h3>
+<p>在项目创建页面或项目设置页 → <code>Labels</code> 区域 →
+右上角小开关切到 <strong>"Raw"</strong> 模式 （默认是 "Constructor"
+可视化模式）→ 把 <code>rules/cvat_labels.json</code>
+整个文件内容<strong>复制粘贴</strong>进去 → 点
+<strong>Save</strong>。</p>
+<p>CVAT 会自动解析，左侧出现 20 个标签：</p>
+<ul>
+<li>总平面图 7
+个：<code>station_exit_ground</code>、<code>vent_group_ground</code>、<code>surrounding_building</code>、
+<code>building_meta</code>、<code>vent_meta</code>、<code>dimension_val</code>、<code>fire_clearance_line</code></li>
+<li>站厅层 13
+个：<code>fire_compartment</code>、<code>public_area</code>、<code>commercial_shop</code>、<code>safety_exit</code>、
+<code>stair_escalator</code>、<code>gate</code>、<code>fire_door</code>、<code>fire_shutter</code>、<code>draft_curtain</code>、
+<code>evac_distance_line</code>、<code>width_dimension_line</code>、<code>room_title</code>、<code>val_text</code></li>
+</ul>
+<h3 id="4-在该项目下建任务分配图纸">4. 在该项目下建任务、分配图纸</h3>
+<p>之后所有任务都从这个项目派生，标签集自动继承，标注员开干。</p>
+<hr />
+<h2 id="导入后效果">导入后效果</h2>
+<p>✅ <strong>下拉菜单锁死</strong> —— 标注员只能从 20
+个标签里选，输不进"注释""宽度线"等 ✅ <strong>属性枚举锁死</strong> ——
+<code>fire_door.class</code> 只能选 甲级/乙级/unknown；
+<code>fire_compartment.zone_type</code> 只能选 公共区/无人区/有人值守区
+✅ <strong>类型锁死</strong> —— <code>fire_door</code>
+只能画矩形，<code>fire_compartment</code> 只能画多边形，
+<code>evac_distance_line</code> 只能画折线 ✅ <strong>颜色区分</strong>
+—— 每类标签自带不同颜色，CVAT 标注视图一眼分清楚 ✅
+<strong>必填属性默认值</strong> —— 有 <code>unknown</code>
+选项的（<code>fire_rating</code>/<code>class</code>/<code>building_type</code>/<code>discharge_type</code>）漏填兜底为
+<code>unknown</code>；
+<code>zone_type</code>/<code>vent_function</code>/<code>swing_dir</code>
+无 <code>unknown</code>、<strong>默认留空强制主动选</strong>，漏选会被
+QC 报"缺必填"，不会静默落错值</p>
+<hr />
+<h2 id="工具命令一览开发组维护用">工具命令一览（开发组维护用）</h2>
+<pre class="bash"><code># 生成最新 CVAT 模板（每次 SCHEMA 改动后跑一次）
+python tools/fire_anno_tool.py export-cvat-labels rules/cvat_labels.json
+
+# 验证模板格式（JSON + 字段齐全）
+python -c &quot;import json; print(len(json.load(open(&#39;rules/cvat_labels.json&#39;,encoding=&#39;utf-8&#39;))), &#39;个标签&#39;)&quot;
+
+# 转换 CVAT 导出的 XML（中文→英文，已基本不需要，因为模板锁死后标签直接是英文）
+python tools/fire_anno_tool.py convert annotations.xml annotations_en.xml
+
+# 质检 CVAT 导出的 XML
+python tools/fire_anno_tool.py qc annotations_en.xml [--type hall|site]</code></pre>
+<p>【建议 2：CVAT 模板锁死】的落地。 另两条建议同步落地：</p>
+<ul>
+<li>建议 1（关系标注校验）：QC 加了 4 条 ORPHAN
+检查（<code>VAL_TEXT_ORPHAN</code> / <code>ROOM_TITLE_ORPHAN</code> /
+<code>WIDTH_LINE_ORPHAN</code> / <code>DIM_VAL_ORPHAN</code>），跑
+<code>qc</code> 时自动校验</li>
+<li>建议 3（无文字层兜底）：QC 报 <code>BAD_LABEL: '注释'</code>
+时<strong>附拆解指引</strong>，明确告知 "不要直接删，按内容拆到
+fire_door.text_content / room_title / val_text / dimension_val"</li>
+</ul>
+
+</body>
+</html>

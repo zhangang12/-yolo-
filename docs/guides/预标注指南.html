@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>预标注指南</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+         max-width: 1100px; margin: 24px auto; padding: 0 28px; color: #2c3e50;
+         line-height: 1.7; background: #fafbfc; }
+  h1 { color: #c0392b; border-bottom: 3px solid #c0392b; padding-bottom: 10px; }
+  h2 { color: #2980b9; margin-top: 36px; border-left: 5px solid #2980b9; padding-left: 12px; }
+  h3 { color: #27ae60; margin-top: 28px; }
+  h4 { color: #8e44ad; margin-top: 20px; }
+  code { background: #f4f6f8; padding: 2px 6px; border-radius: 3px;
+         font-family: "Consolas", "Monaco", monospace; color: #e74c3c; font-size: 13.5px; }
+  pre { background: #2c3e50; color: #ecf0f1; padding: 14px 18px; border-radius: 6px;
+        overflow-x: auto; font-size: 13.5px; line-height: 1.55; }
+  pre code { background: transparent; color: #ecf0f1; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; background: white; font-size: 14px; }
+  th, td { border: 1px solid #d5dbdb; padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: #34495e; color: white; font-weight: 600; }
+  tr:nth-child(even) td { background: #fbfcfd; }
+  .tip { background: #eafaf1; border-left: 4px solid #27ae60; padding: 10px 16px; margin: 14px 0; border-radius: 0 4px 4px 0; }
+  .warn { background: #fef5e7; border-left: 4px solid #e67e22; padding: 10px 16px; margin: 14px 0; border-radius: 0 4px 4px 0; }
+  .danger { background: #fdedec; border-left: 4px solid #e74c3c; padding: 10px 16px; margin: 14px 0; border-radius: 0 4px 4px 0; }
+  .toc { background: #ecf0f1; padding: 12px 22px; border-radius: 6px; margin: 18px 0 28px; }
+  .toc ol { margin: 6px 0; padding-left: 22px; }
+  .toc a { color: #2980b9; text-decoration: none; }
+  .badge { display: inline-block; padding: 1px 9px; border-radius: 10px; font-size: 12px; font-weight: 600; color: white; margin-right: 4px; }
+  .badge.green { background: #27ae60; }
+  .badge.blue  { background: #2980b9; }
+  .badge.purple { background: #8e44ad; }
+  .badge.orange { background: #e67e22; }
+  .badge.new { background: #e74c3c; }
+  hr { border: none; border-top: 1px dashed #bdc3c7; margin: 30px 0; }
+  .flow { background: #fff; border: 1px solid #d5dbdb; padding: 14px 20px; border-radius: 6px; margin: 14px 0; }
+  .flow-step { padding: 6px 12px; background: #2980b9; color: white; border-radius: 4px;
+               display: inline-block; margin: 4px; font-size: 13px; }
+  .flow-arrow { color: #7f8c8d; font-size: 18px; padding: 0 4px; }
+</style>
+</head>
+<body>
+<h1 id="预标注使用指南">预标注使用指南</h1>
+<p>预标注 = 让机器先把"候选标注"铺到图上，人工只需 <strong>核对 +
+修正</strong>，而不是从零画。
+它解决的是体力活（画、防漏、统一画法、提速），<strong>判断对错仍需人工</strong>（见文末"人工确认流程"）。</p>
+<p>本项目有两个版本：</p>
+<table>
+<thead>
+<tr>
+<th>版本</th>
+<th>脚本</th>
+<th>特点</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>基础版</strong></td>
+<td><code>tools/fire_anno_tool.py prelabel</code></td>
+<td>文字/线/区域三类候选，<strong>不分子类</strong>（都叫 val_text /
+width_dimension_line / fire_compartment）</td>
+</tr>
+<tr>
+<td><strong>增强版</strong> ⭐</td>
+<td><code>app/backend/prelabel_pro.py</code></td>
+<td>语义细分 + 内容填充(OCR可选) + 置信度分级 + 确认清单 + 接质检</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>推荐用增强版。客户端「数据准备 → 预标注」默认就是增强版。</p>
+</blockquote>
+<hr />
+<h2 id="一它是怎么做到的原理">一、它是怎么做到的（原理）</h2>
+<p>矢量 PDF
+里墙、线、文字笔画都是<strong>真实几何对象</strong>（不是像素），用
+<code>PyMuPDF</code> 的 <code>get_drawings()</code>
+全部读出来，再用规则聚成候选：</p>
+<ol type="1">
+<li><strong>文字块</strong>：文字在矢量里是一堆小笔画 →
+用并查集把邻近小笔画聚成"一行字"的框。</li>
+<li><strong>线</strong>：挑出长的水平/垂直直线段（尺寸线、墙线），并记录描边<strong>颜色</strong>。</li>
+<li><strong>区域</strong>：把所有线画到一张 mask 上 → 形态学闭运算补缝 →
+找闭合轮廓 = 一个个房间/分区。</li>
+</ol>
+<blockquote>
+<p>⚠️
+<strong>重要前提</strong>：本项目的图纸<strong>没有文字层</strong>（文字是用曲线"画"出来的，<code>get_text</code>
+取不到）。 所以文字框只能定位"这里有字"，<strong>内容必须靠
+OCR</strong>。装了 tesseract 才能读出内容并据此分类。</p>
+</blockquote>
+<hr />
+<h2 id="二增强版相比基础版多了什么">二、增强版相比基础版多了什么</h2>
+<ol type="1">
+<li><strong>语义细分</strong>（按 几何 / 颜色 / 图类型 / OCR内容）
+<ul>
+<li>文字：数字→<code>dimension_val</code>/<code>val_text</code>；"机房/泵房/厕所"→<code>room_title</code>；"敞口/侧出"→<code>vent_meta</code>；"高层/耐火等级"→<code>building_meta</code>。</li>
+<li>线：站厅图按长度分 <code>evac_distance_line</code>(长) /
+<code>width_dimension_line</code>(短)；总平面图→<code>fire_clearance_line</code>；蓝色线置信度更高。</li>
+<li>区域：总平面图按面积分 <code>surrounding_building</code> /
+<code>station_exit_ground</code>；站厅图→<code>fire_compartment</code>
+并<strong>预填
+<code>zone_type</code></strong>（内含"机房/泵房"等词→无人区）。</li>
+</ul></li>
+<li><strong>内容填充</strong>：OCR 读文字框内容写入
+<code>text_content</code>（需 tesseract）。</li>
+<li><strong>辅助人工确认</strong>：
+<ul>
+<li><strong>置信度分级</strong>：高置信标
+<code>source=auto</code>（信任）、低置信标
+<code>source=auto_review</code>（重点审）。</li>
+<li><strong>颜色编码预览</strong>：橙/红 = 待审，青/绿 = 较确定。</li>
+<li><strong>确认清单
+<code>_review.txt</code></strong>：主动列出"疑似漏分区""分区类型是猜的""未启用OCR"等待办。</li>
+<li><strong><code>--qc</code> 自检</strong>：预标完自动跑质检。</li>
+</ul></li>
+</ol>
+<hr />
+<h2 id="三怎么用">三、怎么用</h2>
+<h3 id="a-客户端推荐">A. 客户端（推荐）</h3>
+<ol type="1">
+<li><code>python app/main.py</code> → 左侧「数据准备」→
+顶部「预标注」。</li>
+<li>选矢量 PDF、输出目录；勾选「增强预标注」（默认开）。</li>
+<li>选<strong>图类型</strong>（关键！见下）、按需勾「OCR」「完成后自动质检」。</li>
+<li>点「运行」。右侧上方看叠加预览，下方看日志与确认清单。</li>
+</ol>
+<h3 id="b-命令行">B. 命令行</h3>
+<pre class="bash"><code># 增强版（总平面图，自动质检）
+python app/backend/prelabel_pro.py docs/图纸.pdf out_dir --type site --qc
+
+# 站厅图 + OCR 读内容（需先装 tesseract）
+python app/backend/prelabel_pro.py docs/图纸.pdf out_dir --type hall --ocr --qc
+
+# 多页一次跑
+python app/backend/prelabel_pro.py 图纸.pdf out_dir --page all
+
+# 基础版
+python tools/fire_anno_tool.py prelabel docs/图纸.pdf out_dir --dpi 200</code></pre>
+<h3 id="参数说明增强版">参数说明（增强版）</h3>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>默认</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--page</code></td>
+<td><code>0</code></td>
+<td>页码，或 <code>all</code> 跑全部页</td>
+</tr>
+<tr>
+<td><code>--dpi</code></td>
+<td><code>200</code></td>
+<td>渲染底图分辨率，目标小就调高</td>
+</tr>
+<tr>
+<td><code>--type</code></td>
+<td><code>auto</code></td>
+<td><code>site</code>(总平面) / <code>hall</code>(站厅) /
+<code>auto</code>(按文件名猜)</td>
+</tr>
+<tr>
+<td><code>--ocr</code></td>
+<td>关</td>
+<td>启用 OCR 读文字内容（需 tesseract）</td>
+</tr>
+<tr>
+<td><code>--qc</code></td>
+<td>关</td>
+<td>预标完自动跑质检</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong><code>--type</code>
+很关键</strong>：它决定用哪套标签和分类规则。<code>auto</code>
+仅按文件名里的"总平面/站厅"判断， 文件名不含这些词时默认
+<code>site</code>。<strong>图纸是站厅/站台图时务必手动选
+<code>hall</code></strong>，否则区域会被分成出入口而不是防火分区。</p>
+</blockquote>
+<hr />
+<h2 id="四输出物">四、输出物</h2>
+<p>跑完在输出目录得到（<code>xxx</code> = PDF 名，<code>pN</code> =
+页号）： | 文件 | 用途 | |---|---| | <code>xxx_pN.jpg</code> |
+渲染底图（CVAT 里给人看的图） | | <code>xxx_pN_prelabel.xml</code> |
+<strong>CVAT 预标文件</strong>，导入 CVAT 即可审核 | |
+<code>xxx_pN_overlay.jpg</code> |
+叠加预览（橙/红=待审，青/绿=较确定，品红=线） | |
+<code>xxx_pN_review.txt</code> |
+<strong>人工确认清单</strong>，列出待办与疑点 |</p>
+<hr />
+<h2 id="五装-ocrtesseract">五、装 OCR（tesseract）</h2>
+<p>不装也能用（文字内容留空、统一待审），但装了才能自动填内容、分文字类型。</p>
+<ul>
+<li><strong>Windows</strong>：装 <a
+href="https://github.com/UB-Mannheim/tesseract/wiki">UB-Mannheim/tesseract</a>
+安装包，勾选中文语言包，加入 PATH。</li>
+<li><strong>macOS</strong>：<code>brew install tesseract tesseract-lang</code></li>
+<li><strong>Ubuntu</strong>：<code>sudo apt install tesseract-ocr tesseract-ocr-chi-sim</code></li>
+</ul>
+<p>装好后命令行加 <code>--ocr</code> 或客户端勾「OCR」重跑即可。</p>
+<hr />
+<h2
+id="六人工确认流程预标注省不掉的一步">六、人工确认流程（预标注省不掉的一步）</h2>
+<p>预标注是<strong>辅助</strong>，进训练集前必须人工确认：</p>
+<ol type="1">
+<li>把 <code>xxx_pN_prelabel.xml</code> 导入 CVAT，对照底图。</li>
+<li>先看 <code>_review.txt</code> 确认清单，按它逐条处理疑点。</li>
+<li>重点审
+<code>source=auto_review</code>（预览里橙/红）的候选：删错的、改语义、修边界。</li>
+<li>补全文字内容（没 OCR 时）、确认每个 <code>fire_compartment</code> 的
+<code>zone_type</code>。</li>
+<li>结合规范补"该有但图上没画"的（如设备区分区漏画）——这类机器变不出来。</li>
+<li>改完用 <code>python tools/fire_anno_tool.py qc 改好的.xml</code>
+自检，通过后再进训练集。</li>
+</ol>
+<hr />
+<h2 id="七当前局限已知待迭代">七、当前局限（已知，待迭代）</h2>
+<ul>
+<li>文字框靠笔画聚类，密集处可能粘连或漏聚；区域靠"补缝"，缝太大会漏、补过头会粘连。</li>
+<li>线/区域的子类是<strong>启发式猜测</strong>，置信度普遍偏低（设计上就让人重点审）。</li>
+<li>颜色信息有限（本批图纸主要黑/灰，蓝色少量），颜色线索作用有限。</li>
+<li>没装 OCR
+时文字内容全空——这是图纸无文字层导致的硬限制，非脚本缺陷。</li>
+</ul>
+
+</body>
+</html>
