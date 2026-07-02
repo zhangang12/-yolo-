@@ -382,10 +382,10 @@ def run(xml_path, img_path, out_dir, scale=None, station_meta=None, rules_path=N
     if img is None:
         raise FileNotFoundError(f"读图失败: {img_path}")
     image_node = parse_one_image(xml_path, img_basename)
-    annotated, n_labels = annotate_failures(img, image_node, structured, findings, fail_only=True)
+    annotated, n_labels = annotate_failures(img, image_node, structured, findings, fail_only=False)
     out_jpg = os.path.join(out_dir, f"{stem}_e2e_fail.jpg")
     _imwrite(out_jpg, annotated)
-    print(f"  标注图 ({n_labels} 个 FAIL 位置已圈出): {out_jpg}")
+    print(f"  标注图 ({n_labels} 个 FAIL/REVIEW 位置已圈出): {out_jpg}")
 
     # 4) 输出 JSON + Markdown 报告
     print("[4/4] 写出 JSON + 报告 ...")
