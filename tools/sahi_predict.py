@@ -80,6 +80,21 @@ def _nms(boxes, scores, classes, iou_thresh=0.5):
     return sorted(keep)
 
 
+def _resolve_device(device):
+    """请求的是 GPU 但机器没有可用 CUDA 时自动降级到 CPU（无 GPU 的机器如 Mac/纯 CPU 笔记本会跑到这）。"""
+    dev = str(device).strip().lower()
+    if dev in ("", "cpu", "mps"):
+        return device
+    try:
+        import torch
+        if not torch.cuda.is_available():
+            print(f"[提示] 请求 device={device} 但未检测到可用 CUDA 显卡，自动改用 CPU 推理（会比较慢）。", flush=True)
+            return "cpu"
+    except Exception:
+        return "cpu"
+    return device
+
+
 def sliced_predict(weights, img_path, tile=1024, overlap=128, conf=0.25,
                    iou=0.5, device=0, out_dir=None):
     """对单张大图做切片推理，返回 (合并后的检测列表, 输出文件路径)。
@@ -91,6 +106,7 @@ def sliced_predict(weights, img_path, tile=1024, overlap=128, conf=0.25,
     import cv2, numpy as np
     from ultralytics import YOLO
 
+    device = _resolve_device(device)
     model = YOLO(weights)
     class_names = model.names
 

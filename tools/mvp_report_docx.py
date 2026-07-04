@@ -287,7 +287,7 @@ def build(findings_path, annotated_img, out_docx,
     # ---------- 标注图 ----------
     doc.add_heading("四、违规位置标注图", level=1)
     if annotated_img and os.path.exists(annotated_img):
-        doc.add_paragraph("红框 = 不合规(对应「不合规明细」表的图上编号),旁边附 ID 与规则编号:")
+        doc.add_paragraph("红框 = 不合规(对应「不合规明细」表的图上编号)，黄框 = 待人工复核(对应「待人工复核」表的图上编号)，旁边附 ID 与规则编号:")
         doc.add_picture(annotated_img, width=Cm(16))
     else:
         doc.add_paragraph("(标注图未生成或不可读)")
