@@ -254,17 +254,22 @@ def run(xml_path, img_path, out_dir, scale=None, station_meta=None, rules_path=N
 
     # ★ 数据源决策: CVAT 真值优先,否则用 YOLO 自动识别生成临时 CVAT
     data_source = "cvat"   # 供报告如实标注数据来源
+    yolo_pred_jpg = None   # 走 YOLO 分支时,sahi_predict 顺带产出的识别图(按类别上色)
     if not xml_path:
         if yolo_weights:
             print(f"[准备] 未提供 CVAT 标注,用 YOLO 自动识别: {yolo_weights}")
             data_source = "yolo"
             import yolo_to_cvat
             tmp_xml = os.path.join(out_dir, f"{stem}_yolo_auto.xml")
-            yolo_to_cvat.yolo_to_cvat(yolo_weights, img_path, tmp_xml,
-                                      conf=yolo_conf, iou=yolo_iou,
-                                      tile=yolo_tile, overlap=yolo_overlap,
-                                      device=yolo_device)
+            _, _, _, yolo_pred_jpg = yolo_to_cvat.yolo_to_cvat(
+                yolo_weights, img_path, tmp_xml,
+                conf=yolo_conf, iou=yolo_iou,
+                tile=yolo_tile, overlap=yolo_overlap,
+                device=yolo_device)
             xml_path = tmp_xml
+            if yolo_pred_jpg and os.path.exists(yolo_pred_jpg):
+                # 机器可解析行,供客户端(page_e2e.py)优先加载 YOLO 识别图
+                print(f"[YOLO-PRED] {yolo_pred_jpg}")
         else:
             raise ValueError("必须提供 xml_path(CVAT 真值)或 yolo_weights(自动识别)之一")
 
@@ -443,7 +448,8 @@ def run(xml_path, img_path, out_dir, scale=None, station_meta=None, rules_path=N
         out_docx = None
 
     print(f"\n[完成] {out_dir}")
-    return {"summary": summary, "annotated": out_jpg, "report": out_md, "docx": out_docx}
+    return {"summary": summary, "annotated": out_jpg, "yolo_pred": yolo_pred_jpg,
+            "report": out_md, "docx": out_docx}
 
 
 def main():

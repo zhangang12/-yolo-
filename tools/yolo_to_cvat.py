@@ -120,15 +120,15 @@ def yolo_to_cvat(weights, img_path, out_xml,
                  conf=0.25, iou=0.5, tile=1024, overlap=128, device="0"):
     """端到端: best.pt + 图 → 切片推理 → 写 CVAT XML。
 
-    返回 (out_xml_path, detection_count, by_class_dict)。
+    返回 (out_xml_path, detection_count, by_class_dict, pred_jpg_path)。
     """
     from sahi_predict import sliced_predict, _imread, _count_by_class
 
     # 跑切片推理
-    detections, _, _ = sliced_predict(
+    detections, pred_jpg, _ = sliced_predict(
         weights, img_path, tile=tile, overlap=overlap,
         conf=conf, iou=iou, device=device,
-        out_dir=os.path.dirname(out_xml) or ".",   # 标注图随便存,这里只为复用 sliced_predict
+        out_dir=os.path.dirname(out_xml) or ".",   # 顺带存一份 YOLO 识别图(pred_jpg),供上游预览
     )
     # 读图拿到 W/H(中文路径安全)
     img = _imread(img_path)
@@ -146,7 +146,7 @@ def yolo_to_cvat(weights, img_path, out_xml,
     print(f"[yolo→cvat] {len(detections)} 个检测 → {out_xml}")
     for c, n in sorted(by_class.items(), key=lambda x: -x[1]):
         print(f"    {c:24s} {n}")
-    return out_xml, len(detections), by_class
+    return out_xml, len(detections), by_class, pred_jpg
 
 
 def main():
