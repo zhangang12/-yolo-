@@ -30,6 +30,14 @@ from page_e2e import E2EPage
 from page_train import TrainPage
 from page_rules import RulesPage
 
+# 打包成 exe(交付/演示版)默认隐藏「YOLO 训练」页;源码运行(python app/main.py)默认显示。
+# 需要时用环境变量强制覆盖:FIRE_SHOW_TRAIN=1 显示、FIRE_SHOW_TRAIN=0 隐藏。
+_env_show_train = os.environ.get("FIRE_SHOW_TRAIN")
+if _env_show_train is not None:
+    SHOW_TRAIN_PAGE = _env_show_train == "1"
+else:
+    SHOW_TRAIN_PAGE = not getattr(sys, "frozen", False)
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -53,8 +61,9 @@ class MainWindow(QMainWindow):
             ("数据准备", PreparePage(ROOT)),
             ("端到端预审", E2EPage(ROOT)),
             ("规则库", RulesPage(ROOT)),
-            ("YOLO 训练", TrainPage(ROOT)),
         ]
+        if SHOW_TRAIN_PAGE:
+            pages.append(("YOLO 训练", TrainPage(ROOT)))
         self.bg = QButtonGroup(self); self.bg.setExclusive(True)
         for i, (name, page) in enumerate(pages):
             self.stack.addWidget(page)
