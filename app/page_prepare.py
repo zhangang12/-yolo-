@@ -96,7 +96,7 @@ class PreparePage(QWidget):
             self.pl_type.addItem(label, val)
         trow.addWidget(self.pl_type); trow.addStretch(1)
         pb.addLayout(trow)
-        self.pl_ocr = QCheckBox("顺便识别文字内容（需先装 OCR 组件 tesseract）")
+        self.pl_ocr = QCheckBox("识别文字内容（需先装 OCR 组件 tesseract）")
         pb.addWidget(self.pl_ocr)
         self.pl_qc = QCheckBox("完成后自动检查一遍标注质量"); self.pl_qc.setChecked(True)
         pb.addWidget(self.pl_qc)

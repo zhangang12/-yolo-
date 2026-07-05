@@ -97,6 +97,7 @@ class E2EPage(QWidget):
         yolo = self.yolo_weights.text()
         if not pdf:
             self.log.append_text("⚠️ 请先选择矢量 PDF。\n"); return
+        self._yolo_pred = None   # 走 YOLO 分支时由 [YOLO-PRED] 行回填
 
         # ★ 数据源优先级 (mvp_e2e 走的"识别"那一环):
         #   ① 用户手填 CVAT XML       — 真值最准
@@ -193,6 +194,10 @@ class E2EPage(QWidget):
         for i, m in enumerate(["[0/4]", "[1/4]", "[2/4]", "[3/4]"]):
             if m in s:
                 self._light(i)
+        # 走 YOLO 自动识别分支时,mvp_e2e 会回报识别图路径,供完成后优先预览
+        for line in s.splitlines():
+            if "[YOLO-PRED]" in line:
+                self._yolo_pred = line.split("[YOLO-PRED]", 1)[1].strip()
 
     def _on_finished(self, code):
         self._set_running(False)
@@ -209,10 +214,17 @@ class E2EPage(QWidget):
             png = os.path.join(self._out_dir, "e2e_annotated.png")
             js = os.path.join(self._out_dir, "e2e_structured.json")
             md = None
-        if os.path.exists(png) and self.viewer.load(png):
-            tip = "[预览] 已加载标注图（红框=违规位置，旁附规则编号）。\n" \
-                  if getattr(self, "_use_mvp", False) \
-                  else "[预览] 已加载标注图（绿=合规，红=超限）。\n"
+        # 走了「方式②YOLO自动识别」时,预览优先显示 YOLO 识别图(按类别上色),
+        # 而不是合规标注图;方式①(CVAT真值)没有 YOLO 推理,不受影响,仍显示标注图。
+        yolo_pred = getattr(self, "_yolo_pred", None)
+        preview_img = yolo_pred if (yolo_pred and os.path.exists(yolo_pred)) else png
+        if os.path.exists(preview_img) and self.viewer.load(preview_img):
+            if preview_img == yolo_pred:
+                tip = "[预览] 已加载 YOLO 识别图（按类别上色，如紫=楼梯扶梯、红=防火门等）。\n"
+            else:
+                tip = "[预览] 已加载标注图（红框=违规位置，旁附规则编号）。\n" \
+                      if getattr(self, "_use_mvp", False) \
+                      else "[预览] 已加载标注图（绿=合规，红=超限）。\n"
             self.log.append_text(tip)
         if os.path.exists(js):
             try:
